@@ -1,0 +1,4 @@
+/data/
+/cmake-build-debug/
+/include/Eigen/
+/.idea/
