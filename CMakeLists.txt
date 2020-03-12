@@ -18,7 +18,6 @@ find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 
 add_definitions(${PCL_DEFINITIONS})
-
 catkin_package()
 
 include_directories(${PCL_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
@@ -30,4 +29,7 @@ target_link_libraries(save_pcd_jpgs ${PCL_LIBRARIES} ${catkin_LIBRARIES} ${OpenC
 
 add_executable(detect_test src/detect_test.cpp)
 target_link_libraries(detect_test ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(test src/test.cpp)
+target_link_libraries(test ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
