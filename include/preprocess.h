@@ -10,6 +10,8 @@
 #include "Eigen/Eigen"
 #include <opencv2/core/eigen.hpp>
 
+typedef std::vector<std::vector<Eigen::Vector3f>> MAP_3D;
+
 void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
 {
     float radian = (float) (angle /180.0 * CV_PI);
@@ -75,10 +77,41 @@ void getScaledAndRotatedImgs(cv::Mat src, std::vector<std::vector<cv::Mat>> &res
 }
 
 
-std::vector<Eigen::MatrixXf> getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float scale_factor, float rotate_angle,
-        std::vector<Eigen::MatrixXf> &kernels, std::vector<Eigen::MatrixXf> &cost_maps, std::vector<Eigen::MatrixXf> &corresponding_angles)
+void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float scale_factor, float rotate_angle,
+        std::vector<Eigen::MatrixXf> &kernels, std::vector<MAP_3D> &cost_maps, std::vector<MAP_3D> &corresponding_angles)
 {
+    /// Size of all kernels should be the same!
+    int cost_map_size_x = transformed_images[0][0].rows - kernels[0].rows() + 1; //transformed_images[0][0] is the original image
+    int cost_map_size_y = transformed_images[0][0].cols - kernels[0].cols() + 1;
 
+    // Initialize
+    for(int i=0; i<kernels.size();i++){
+        MAP_3D cost_map(cost_map_size_x, std::vector< Eigen::Vector3f >(cost_map_size_y, Eigen::Vector3f::Zero()));
+        cost_maps.push_back(cost_map);
+    }
+    for(int j=0; j<kernels.size();j++){
+        MAP_3D corresponding_angle(cost_map_size_x, std::vector< Eigen::Vector3f >(cost_map_size_y, Eigen::Vector3f::Zero()));
+        corresponding_angles.push_back(corresponding_angle);
+    }
+
+    // Calculate cost maps
+    for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++)
+    {
+        for(int scaled_times = 0; scaled_times < transformed_images.size(); scaled_times++)
+        {
+            for(int rotate_times = 0; rotate_times < transformed_images[scaled_times].size(); rotate_times++)
+            {
+                // Transform image to Eigen matrix
+                Eigen::MatrixXi img_matrix_this(transformed_images[scaled_times][rotate_times].rows, transformed_images[scaled_times][rotate_times].cols);
+                cv::cv2eigen(transformed_images[scaled_times][rotate_times], img_matrix_this);
+                // Start to do convolution operations for each image
+
+
+            }
+        }
+    }
+
+    std::cout << "done" << std::endl;
 }
 
 
