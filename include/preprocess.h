@@ -76,13 +76,79 @@ void getScaledAndRotatedImgs(cv::Mat src, std::vector<std::vector<cv::Mat>> &res
     }
 }
 
+Eigen::Vector2i getPositionBeforeOrientationAndScale(int image_x, int image_y, float scale_factor, int scale_times,
+        float rotate_angle, int rotate_times, Eigen::Vector2i position_src)
+{
+    /// The original operation is first to scale and then to orientate
+    int position_x_matrix_center_coordinate = position_src[0] - image_x / 2;
+    int position_y_matrix_center_coordinate = position_src[1] - image_y / 2;
+
+    float orientation_angle = rotate_angle * rotate_times / 180.f * CV_PI;
+    float scale_total_factor = pow(1.f/scale_factor, scale_times);
+    float img_ori_x = image_x * scale_total_factor;
+    float img_ori_y = image_y * scale_total_factor;
+
+    float orientated_x = cos(orientation_angle)*position_x_matrix_center_coordinate + sin(orientation_angle)*position_y_matrix_center_coordinate;
+    float orientated_y = -sin(orientation_angle)*position_x_matrix_center_coordinate + cos(orientation_angle)*position_y_matrix_center_coordinate;
+    float scaled_x = orientated_x * scale_total_factor;
+    float scaled_y = orientated_y * scale_total_factor;
+
+    float ori_position_x = scaled_x + img_ori_x/2;
+    float ori_position_y = scaled_y + img_ori_y/2;
+    ori_position_x = std::min(ori_position_x, img_ori_x-1.f); //Eliminate the influence from calculation precision
+    ori_position_x = std::max(ori_position_x, 0.f);
+    ori_position_y = std::min(ori_position_y, img_ori_y-1.f);
+    ori_position_y = std::max(ori_position_y, 0.f);
+
+    Eigen::Vector2i original_position;
+    original_position << (int)(ori_position_x),  (int)(ori_position_y);
+    return original_position;
+}
+
+
+void exchangeValues(float &a, float &b){
+    float c = a;
+    a = b;
+    b = c;
+}
+
+bool assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(float value_to_insert, float corresponding_value,
+        Eigen::Vector3f &vector_to_rank, Eigen::Vector3f &vector_to_change_correspondingly)
+{
+    /// seq 0->2, small->large
+    /// Suppose vector_to_rank is well ranked before this function.
+    if(value_to_insert < vector_to_rank[2]){
+        vector_to_rank[2] = value_to_insert;
+        vector_to_change_correspondingly[2] = corresponding_value;
+    }else{
+        return false;
+    }
+    if(vector_to_rank[2] < vector_to_rank[1]){
+        exchangeValues(vector_to_rank[2], vector_to_rank[1]);
+        exchangeValues(vector_to_change_correspondingly[2], vector_to_change_correspondingly[1]);
+    }else{
+        return true;
+    }
+
+    if(vector_to_rank[1] < vector_to_rank[0]){
+        exchangeValues(vector_to_rank[1], vector_to_rank[0]);
+        exchangeValues(vector_to_change_correspondingly[1], vector_to_change_correspondingly[0]);
+    }else{
+        return true;
+    }
+}
 
 void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float scale_factor, float rotate_angle,
         std::vector<Eigen::MatrixXf> &kernels, std::vector<MAP_3D> &cost_maps, std::vector<MAP_3D> &corresponding_angles)
 {
-    /// Size of all kernels should be the same!
-    int cost_map_size_x = transformed_images[0][0].rows - kernels[0].rows() + 1; //transformed_images[0][0] is the original image
-    int cost_map_size_y = transformed_images[0][0].cols - kernels[0].cols() + 1;
+    /// Size of all kernels should be the same and should be odds
+    /// The resulted cost map has the same size as the image with no transformation
+    const int kernel_size_x = kernels[0].rows();
+    const int kernel_size_y = kernels[0].cols();
+    const int cost_map_size_x = transformed_images[0][0].rows; //transformed_images[0][0] is the original image
+    const int cost_map_size_y = transformed_images[0][0].cols;
+    const int kernel_edge_x = (kernel_size_x - 1) / 2;
+    const int kernel_edge_y = (kernel_size_y - 1) / 2;
 
     // Initialize
     for(int i=0; i<kernels.size();i++){
@@ -102,16 +168,57 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
             for(int rotate_times = 0; rotate_times < transformed_images[scaled_times].size(); rotate_times++)
             {
                 // Transform image to Eigen matrix
-                Eigen::MatrixXi img_matrix_this(transformed_images[scaled_times][rotate_times].rows, transformed_images[scaled_times][rotate_times].cols);
+                int image_this_size_x = transformed_images[scaled_times][rotate_times].rows;
+                int image_this_size_y = transformed_images[scaled_times][rotate_times].cols;
+
+                Eigen::MatrixXf img_matrix_this(image_this_size_x, image_this_size_y);
                 cv::cv2eigen(transformed_images[scaled_times][rotate_times], img_matrix_this);
                 // Start to do convolution operations for each image
+                for(int i=0; i<=image_this_size_x-kernel_size_x; i++){
+                    for(int j=0; j<=image_this_size_y-kernel_size_y;j++){
+                        Eigen::ArrayXXf convolution_no_sum = img_matrix_this.block(i, j, kernel_size_x, kernel_size_y).array() * kernels[kernel_seq].array();
+                        float convolution_result = convolution_no_sum.sum(); //chg
+//                        if(kernel_seq==1){
+//                            std::cout << std::endl << img_matrix_this.block(i, j, kernel_size_x, kernel_size_y).array() << std::endl;
+//                            std::cout << std::endl << kernels[kernel_seq].array() << std::endl;
+//                            std::cout << std::endl << convolution_no_sum << std::endl;
+//                            std::cout << convolution_result;
+//                        }
+
+                        // Get corresponding position in cost map
+                        int kernel_center_position_x = i + kernel_edge_x;
+                        int kernel_center_position_y = j + kernel_edge_y;
+                        Eigen::Vector2i position_src;
+                        position_src << kernel_center_position_x, kernel_center_position_y;
 
 
+                        Eigen::Vector2i position = getPositionBeforeOrientationAndScale(image_this_size_x, image_this_size_y,
+                                 scale_factor, scaled_times, rotate_angle, rotate_times, position_src);
+
+
+//                        if(i==5 && j==20){
+//                            cv::Mat image_transformed_temp, image_ori_temp;
+//                            transformed_images[scaled_times][rotate_times].copyTo(image_transformed_temp);
+//                            transformed_images[0][0].copyTo(image_ori_temp);
+//                            cv::circle(image_transformed_temp, cv::Point(position_src(1), position_src(0)), 2, cv::Scalar(0), 1);
+//
+//                            cv::circle(image_ori_temp, cv::Point(position(1), position(0)), 2, cv::Scalar(0), 1);
+//                            cv::imshow("image_transformed_temp",image_transformed_temp);
+//                            cv::imshow("image_ori_temp", image_ori_temp);
+//                            cv::waitKey();
+//                        }
+
+                        // store the cost and corresponding
+                        assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(convolution_result, rotate_times * rotate_angle,
+                                cost_maps[kernel_seq][position[0]][position[1]], corresponding_angles[kernel_seq][position[0]][position[1]]);
+
+                    }
+                }
             }
         }
     }
 
-    std::cout << "done" << std::endl;
+    std::cout << "cost map finished" << std::endl;
 }
 
 
