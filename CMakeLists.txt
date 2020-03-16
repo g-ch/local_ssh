@@ -17,8 +17,11 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 
-add_definitions(${PCL_DEFINITIONS})
 catkin_package()
+
+set(tinyxml2_LIB
+        /usr/local/lib/libtinyxml2.so
+        )
 
 include_directories(${PCL_INCLUDE_DIRS} ${catkin_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
@@ -31,5 +34,5 @@ add_executable(detect_test src/detect_test.cpp)
 target_link_libraries(detect_test ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(test src/test.cpp)
-target_link_libraries(test ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(test ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tinyxml2_LIB})
 

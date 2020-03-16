@@ -8,6 +8,7 @@
 #include <ctime>
 #include <string>
 #include <cmath>
+#include "labelimg_xml_reader.h"
 
 #define KERNEL_X 13
 #define KERNEL_Y 21
@@ -45,14 +46,23 @@ void defineKernels(std::vector<Eigen::MatrixXf> &kernels)
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "detect_test");
+//    ros::init(argc, argv, "detect_test");
     clock_t start_time, end_time;
+
+    /// Test to read an XML file
+    std::string xml_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811112644.xml";
+    std::string img_path;
+    int img_width, img_height, img_depth;
+    std::vector<Object> objects;
+    readLabelIMGObjectDetectionXML(xml_path, img_path, img_width, img_height, img_depth, objects);
+
 
     /// Read image
 //    cv::Mat img_in = cv::imread("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811112649.png", cv::IMREAD_GRAYSCALE);
 //    cv::Mat img_in = cv::imread("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811114344.png", cv::IMREAD_GRAYSCALE);
-    cv::Mat img_in = cv::imread("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Created1/pow7resolution1.000000T120281212722.png", cv::IMREAD_GRAYSCALE);
+//    cv::Mat img_in = cv::imread("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Created1/pow7resolution1.000000T120281212722.png", cv::IMREAD_GRAYSCALE);
 
+    cv::Mat img_in = cv::imread(img_path, cv::IMREAD_GRAYSCALE);
     start_time = clock();
     /// Scale and rotate
     std::vector<std::vector<cv::Mat>> result_imgs;
