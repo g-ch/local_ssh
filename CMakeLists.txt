@@ -36,3 +36,6 @@ target_link_libraries(detect_test ${catkin_LIBRARIES} ${OpenCV_LIBS})
 add_executable(test src/test.cpp)
 target_link_libraries(test ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tinyxml2_LIB})
 
+add_executable(gateway_training src/gateway_training.cpp)
+target_link_libraries(gateway_training ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tinyxml2_LIB})
+

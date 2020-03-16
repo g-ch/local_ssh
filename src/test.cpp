@@ -9,9 +9,41 @@
 #include <string>
 #include <cmath>
 #include "labelimg_xml_reader.h"
+#include <dirent.h>
+#include <sys/types.h>
 
 #define KERNEL_X 13
 #define KERNEL_Y 21
+
+void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
+{
+    /// The required_type should be like ".jpg" or ".xml".
+    DIR *pDir;
+    struct dirent* ptr;
+    if(!(pDir = opendir(path.c_str()))){
+        std::cout<<"Folder doesn't Exist!"<<std::endl;
+        return;
+    }
+
+    while((ptr = readdir(pDir)) != 0){
+        std::string file_name_temp = ptr->d_name;
+        if(required_type==".all"){
+            filenames.push_back(file_name_temp);
+        }else{
+            std::string::size_type position;
+            position = file_name_temp.find(required_type);
+            if(position != file_name_temp.npos){
+                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
+                std::cout << file_name_temp2 << std::endl;
+                filenames.push_back(file_name_temp2);
+            }
+        }
+
+    }
+    closedir(pDir);
+}
+
+
 
 void defineKernels(std::vector<Eigen::MatrixXf> &kernels)
 {
@@ -50,6 +82,11 @@ int main(int argc, char** argv)
     clock_t start_time, end_time;
 
     /// Test to read an XML file
+    std::vector<std::string> filenames;
+    getFileNames("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2", filenames, ".xml");
+
+
+
     std::string xml_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811112644.xml";
     std::string img_path;
     int img_width, img_height, img_depth;

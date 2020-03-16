@@ -178,12 +178,6 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
                     for(int j=0; j<=image_this_size_y-kernel_size_y;j++){
                         Eigen::ArrayXXf convolution_no_sum = img_matrix_this.block(i, j, kernel_size_x, kernel_size_y).array() * kernels[kernel_seq].array();
                         float convolution_result = convolution_no_sum.sum(); //chg
-//                        if(kernel_seq==1){
-//                            std::cout << std::endl << img_matrix_this.block(i, j, kernel_size_x, kernel_size_y).array() << std::endl;
-//                            std::cout << std::endl << kernels[kernel_seq].array() << std::endl;
-//                            std::cout << std::endl << convolution_no_sum << std::endl;
-//                            std::cout << convolution_result;
-//                        }
 
                         // Get corresponding position in cost map
                         int kernel_center_position_x = i + kernel_edge_x;
@@ -195,18 +189,6 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
                         Eigen::Vector2i position = getPositionBeforeOrientationAndScale(image_this_size_x, image_this_size_y,
                                  scale_factor, scaled_times, rotate_angle, rotate_times, position_src);
 
-
-//                        if(i==5 && j==20){
-//                            cv::Mat image_transformed_temp, image_ori_temp;
-//                            transformed_images[scaled_times][rotate_times].copyTo(image_transformed_temp);
-//                            transformed_images[0][0].copyTo(image_ori_temp);
-//                            cv::circle(image_transformed_temp, cv::Point(position_src(1), position_src(0)), 2, cv::Scalar(0), 1);
-//
-//                            cv::circle(image_ori_temp, cv::Point(position(1), position(0)), 2, cv::Scalar(0), 1);
-//                            cv::imshow("image_transformed_temp",image_transformed_temp);
-//                            cv::imshow("image_ori_temp", image_ori_temp);
-//                            cv::waitKey();
-//                        }
 
                         // store the cost and corresponding
                         assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(convolution_result, rotate_times * rotate_angle,
