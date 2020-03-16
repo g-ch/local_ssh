@@ -10,11 +10,14 @@
 #include "labelimg_xml_reader.h"
 #include <dirent.h>
 #include <fstream>
+#include <sstream>
 #include <cstdlib>
 #include <ctime>
+#include <opencv2/ml.hpp>
 
 #define KERNEL_X 13
 #define KERNEL_Y 21
+
 
 void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
 {
@@ -86,12 +89,12 @@ void defineKernels(std::vector<Eigen::MatrixXf> &kernels)
     kernels.push_back(kernel3);
 }
 
-int main(int argc, char** argv)
+
+void generateTrainingData(std::string data_dir)
 {
     clock_t start_time, end_time;
 
     /// Read an XML file names for training
-    std::string data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
     std::vector<std::string> filenames;
     getFileNames(data_dir, filenames, ".xml");
 
@@ -165,14 +168,14 @@ int main(int argc, char** argv)
             }
         }
 
-        /// Add some more negative samples, two samples in one image
-        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<2; neg_extra_sample_seq++)
+        /// Add some more negative samples, 3 samples in one image
+        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<3; neg_extra_sample_seq++)
         {
             int pos_x = rand() % img_height;
             int pos_y = rand() % img_width;
             Eigen::Vector2i point;
             point << pos_x, pos_y;
-            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 5)){
+            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 3)){
                 for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
                     for(int feature_seq=0; feature_seq<cost_maps[kernel_seq][pos_x][pos_y].size(); feature_seq++){
                         negative_data_file << cost_maps[kernel_seq][pos_x][pos_y][feature_seq] << ",";
@@ -189,7 +192,128 @@ int main(int argc, char** argv)
 
     positive_data_file.close();
     negative_data_file.close();
+}
 
+void countCSVSize(const std::string &csv_file, int &line_num, int &elements_in_one_line)
+{
+    line_num = 0;
+    elements_in_one_line = 0;
+
+    std::ifstream file(csv_file);
+    std::string line;
+    while(getline(file, line)){
+        std::istringstream data(line);
+        std::string data_string;
+        if(line_num == 0){
+            while(getline(data, data_string, ',')){
+                elements_in_one_line ++;
+            }
+        }
+        line_num ++;
+    }
+}
+
+void readCSVstoMat(const std::string positive_samples_csv_path, const std::string negative_samples_csv_path, cv::Mat &mat_data, cv::Mat &label)
+{
+    int line_num_positive, elements_in_one_line_positive;
+    countCSVSize(positive_samples_csv_path, line_num_positive, elements_in_one_line_positive);
+    std::cout << "positive samples line_num=" << line_num_positive << " elements_in_one_line="<<elements_in_one_line_positive<<std::endl;
+
+    int line_num_negative, elements_in_one_line_negative;
+    countCSVSize(negative_samples_csv_path, line_num_negative, elements_in_one_line_negative);
+    std::cout << "negative samples line_num=" << line_num_negative << " elements_in_one_line="<<elements_in_one_line_negative<<std::endl;
+
+    if(elements_in_one_line_negative != elements_in_one_line_positive){
+        std::cout << "Error: the feature vector in both csv files should has the same size" << std::endl;
+        return;
+    }
+
+    // Define container
+    const int data_size_x = line_num_positive + line_num_negative;
+    const int data_size_y = elements_in_one_line_positive;
+    mat_data = cv::Mat::zeros(data_size_x, data_size_y, CV_32FC1);
+    int positive_tag = 0, negative_tag = 1;
+    int line_seq = 0;
+
+    // Read positive data
+    std::ifstream positive_file(positive_samples_csv_path);
+    std::string positive_line;
+    while(getline(positive_file, positive_line)){
+        std::istringstream data(positive_line);
+        std::string data_string;
+        int element_seq = 0;
+        while(getline(data, data_string, ',')){
+            std::stringstream ss;
+            ss << data_string;
+            float dd;
+            ss >> dd;
+            mat_data.at<float>(line_seq, element_seq) = dd;
+            element_seq ++;
+        }
+        line_seq ++;
+        label.push_back(cv::Mat(1, 1, CV_32S, &positive_tag)); //label for positive sample is 0
+    }
+
+    // Read negative data
+    std::ifstream negative_file(negative_samples_csv_path);
+    std::string negative_line;
+    while(getline(negative_file, negative_line)){
+        std::istringstream data(negative_line);
+        std::string data_string;
+        int element_seq = 0;
+        while(getline(data, data_string, ',')){
+            std::stringstream ss;
+            ss << data_string;
+            float dd;
+            ss >> dd;
+            mat_data.at<float>(line_seq, element_seq) = dd;
+            element_seq ++;
+        }
+        line_seq ++;
+        label.push_back(cv::Mat(1, 1, CV_32S, &negative_tag)); //label for negative sample is 1
+    }
+
+}
+
+
+void trainingSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &data, cv::Mat &labels)
+{
+//    std::cout << data << std::endl;
+//    std::cout << "label 187=" << labels[186]<<" ,label 188=" <<labels[188] << std::endl;
+    model->setType(cv::ml::SVM::C_SVC);
+    model->setKernel(cv::ml::SVM::LINEAR);  //核函数，这里使用线性核
+
+    cv::Ptr<cv::ml::TrainData> tData = cv::ml::TrainData::create(data, cv::ml::ROW_SAMPLE, labels);
+
+    std::cout << "SVM: start train ..." << std::endl;
+    model->trainAuto(tData);
+    std::cout << "SVM: train success ..." << std::endl;
+}
+
+void predictSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat test)
+{
+    cv::Mat result;
+    float rst = model->predict(test, result);
+    for (int i = 0; i < result.rows; i++){
+        std::cout << result.at<float>(i, 0);
+    }
+}
+
+int main(int argc, char** argv)
+{
+
+//    generateTrainingData("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/");
+
+    cv::Mat data;
+    cv::Mat labels;
+    readCSVstoMat("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/positive_data.csv",
+                  "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/negative_data.csv",
+                  data, labels);
+
+    cv::Ptr<cv::ml::SVM> model = cv::ml::SVM::create();
+    trainingSVM(model, data, labels);
+
+    predictSVM(model, data);
 
     std::cout << "Bye" << std::endl;
     return 0;
