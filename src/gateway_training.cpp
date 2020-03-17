@@ -20,8 +20,8 @@
 
 const float scale_factor = 0.8;
 const int scale_times = 3;
-const float rotate_angle = 15;
-const int rotate_times = 24;
+const float rotate_angle = 30;
+const int rotate_times = 12;
 
 void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
 {
@@ -170,7 +170,7 @@ void generateTrainingData(std::string data_dir)
         }
 
         /// Add some more negative samples, 120 samples in one image
-        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<100; neg_extra_sample_seq++)
+        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<120; neg_extra_sample_seq++)
         {
             int pos_x = rand() % img_height;
             int pos_y = rand() % img_width;
@@ -372,38 +372,47 @@ void imgTest(cv::Ptr<cv::ml::SVM> &model, cv::Mat &img_in)
             }
         }
     }
-    cv::imshow("img_in", img_in);
-    cv::waitKey();
 }
 
 int main(int argc, char** argv)
 {
 
-    generateTrainingData("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/");
+    /// Generating training data
+    std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
 
+    generateTrainingData(training_data_path);
+
+    /// Read training data
     cv::Mat data;
     cv::Mat labels;
-    readCSVstoMat("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/positive_data.csv",
-                  "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/negative_data.csv",
+    readCSVstoMat(training_data_path+"positive_data.csv",
+                  training_data_path+"negative_data.csv",
                   data, labels);
 
-    for(int i=0; i<data.rows; i++) {
-        std::cout << data.at<float>(i, 0) << " ";
-    }
-    std::cout << std::endl;
-
-    for(int i=0; i<labels.rows; i++) {
-        std::cout << labels.at<int>(i, 0) << " ";
-    }
-    std::cout << std::endl;
-
+    /// Training
     cv::Ptr<cv::ml::SVM> model = cv::ml::SVM::create();
     trainingSVM(model, data, labels);
 
+    ///Validating
     validateSVM(model, data, labels);
 
-    cv::Mat img_in = cv::imread("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811112649.png", cv::IMREAD_GRAYSCALE);
-    imgTest(model, img_in);
+    /// Testing with images
+    std::string test_images_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
+    std::vector<std::string> test_image_names;
+    getFileNames(test_images_path, test_image_names, ".png");
+    clock_t start_time, end_time;
+
+    for(const auto &image_to_test : test_image_names){
+        cv::Mat img_in = cv::imread(test_images_path+image_to_test, cv::IMREAD_GRAYSCALE);
+
+        start_time = clock();
+        imgTest(model, img_in);
+        end_time = clock();
+        std::cout << "Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
+
+        cv::imshow("img_in", img_in);
+        cv::waitKey();
+    }
 
     std::cout << "Bye" << std::endl;
     return 0;
