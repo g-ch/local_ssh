@@ -42,7 +42,7 @@ void getFileNames(std::string path, std::vector<std::string>& filenames, std::st
             position = file_name_temp.find(required_type);
             if(position != file_name_temp.npos){
                 std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
-                std::cout << file_name_temp2 << std::endl;
+//                std::cout << file_name_temp2 << std::endl;
                 filenames.push_back(file_name_temp2);
             }
         }
@@ -129,9 +129,8 @@ void generateTrainingData(std::string data_dir)
         getScaledAndRotatedImgs(img_in, result_imgs, scale_factor, scale_times, rotate_angle, rotate_times); //4, 24
 
         /// Get cost maps
-        // Keep minimum three costs (using definition MAP_3D) and their corresponding angles
-        std::vector<MAP_3D> cost_maps;
-        std::vector<MAP_3D> corresponding_angles;
+        std::vector<MAP_XD> cost_maps;
+        std::vector<MAP_XD> corresponding_angles;
 
         getCostMaps(result_imgs, scale_factor, rotate_angle, kernels, cost_maps, corresponding_angles);
 
@@ -169,14 +168,14 @@ void generateTrainingData(std::string data_dir)
             }
         }
 
-        /// Add some more negative samples, 120 samples in one image
-        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<120; neg_extra_sample_seq++)
+        /// Add some more negative samples, 100 samples in one image
+        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<100; neg_extra_sample_seq++)
         {
             int pos_x = rand() % img_height;
             int pos_y = rand() % img_width;
             Eigen::Vector2i point;
             point << pos_x, pos_y;
-            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 3)){
+            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 5)){
                 for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
                     for(int feature_seq=0; feature_seq<cost_maps[kernel_seq][pos_x][pos_y].size(); feature_seq++){
                         negative_data_file << cost_maps[kernel_seq][pos_x][pos_y][feature_seq] << ",";
@@ -336,9 +335,8 @@ void imgTest(cv::Ptr<cv::ml::SVM> &model, cv::Mat &img_in)
     getScaledAndRotatedImgs(img_in, result_imgs, scale_factor, scale_times, rotate_angle, rotate_times); //4, 24
 
     /// Get cost maps
-    // Keep minimum three costs (using definition MAP_3D) and their corresponding angles
-    std::vector<MAP_3D> cost_maps;
-    std::vector<MAP_3D> corresponding_angles;
+    std::vector<MAP_XD> cost_maps;
+    std::vector<MAP_XD> corresponding_angles;
 
     getCostMaps(result_imgs, scale_factor, rotate_angle, kernels, cost_maps, corresponding_angles);
 

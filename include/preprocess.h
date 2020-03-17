@@ -10,7 +10,7 @@
 #include "Eigen/Eigen"
 #include <opencv2/core/eigen.hpp>
 
-typedef std::vector<std::vector<Eigen::Vector3f>> MAP_3D;
+typedef std::vector<std::vector<Eigen::VectorXf>> MAP_XD;
 
 void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
 {
@@ -112,34 +112,8 @@ void exchangeValues(float &a, float &b){
     b = c;
 }
 
-bool assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(float value_to_insert, float corresponding_value,
-        Eigen::Vector3f &vector_to_rank, Eigen::Vector3f &vector_to_change_correspondingly)
-{
-    /// seq 0->2, small->large
-    /// Suppose vector_to_rank is well ranked before this function.
-    if(value_to_insert < vector_to_rank[2]){
-        vector_to_rank[2] = value_to_insert;
-        vector_to_change_correspondingly[2] = corresponding_value;
-    }else{
-        return false;
-    }
-    if(vector_to_rank[2] < vector_to_rank[1]){
-        exchangeValues(vector_to_rank[2], vector_to_rank[1]);
-        exchangeValues(vector_to_change_correspondingly[2], vector_to_change_correspondingly[1]);
-    }else{
-        return true;
-    }
-
-    if(vector_to_rank[1] < vector_to_rank[0]){
-        exchangeValues(vector_to_rank[1], vector_to_rank[0]);
-        exchangeValues(vector_to_change_correspondingly[1], vector_to_change_correspondingly[0]);
-    }else{
-        return true;
-    }
-}
-
 void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float scale_factor, float rotate_angle,
-        std::vector<Eigen::MatrixXf> &kernels, std::vector<MAP_3D> &cost_maps, std::vector<MAP_3D> &corresponding_angles)
+        std::vector<Eigen::MatrixXf> &kernels, std::vector<MAP_XD> &cost_maps, std::vector<MAP_XD> &corresponding_angles)
 {
     /// Size of all kernels should be the same and should be odds
     /// The resulted cost map has the same size as the image with no transformation
@@ -151,12 +125,13 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
     const int kernel_edge_y = (kernel_size_y - 1) / 2;
 
     // Initialize
+    const int feature_size = transformed_images.size() * transformed_images[0].size();
     for(int i=0; i<kernels.size();i++){
-        MAP_3D cost_map(cost_map_size_x, std::vector< Eigen::Vector3f >(cost_map_size_y, Eigen::Vector3f::Zero()));
+        MAP_XD cost_map(cost_map_size_x, std::vector< Eigen::VectorXf >(cost_map_size_y, Eigen::VectorXf::Zero(feature_size)));
         cost_maps.push_back(cost_map);
     }
     for(int j=0; j<kernels.size();j++){
-        MAP_3D corresponding_angle(cost_map_size_x, std::vector< Eigen::Vector3f >(cost_map_size_y, Eigen::Vector3f::Zero()));
+        MAP_XD corresponding_angle(cost_map_size_x, std::vector< Eigen::VectorXf >(cost_map_size_y, Eigen::VectorXf::Zero(feature_size)));
         corresponding_angles.push_back(corresponding_angle);
     }
 
@@ -173,6 +148,9 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
 
                 Eigen::MatrixXf img_matrix_this(image_this_size_x, image_this_size_y);
                 cv::cv2eigen(transformed_images[scaled_times][rotate_times], img_matrix_this);
+
+                int feature_seq = scaled_times * transformed_images[scaled_times].size() + rotate_times;
+
                 // Start to do convolution operations for each image
                 for(int i=0; i<=image_this_size_x-kernel_size_x; i++){
                     for(int j=0; j<=image_this_size_y-kernel_size_y;j++){
@@ -189,10 +167,7 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
                         Eigen::Vector2i position = getPositionBeforeOrientationAndScale(image_this_size_x, image_this_size_y,
                                  scale_factor, scaled_times, rotate_angle, rotate_times, position_src);
 
-
-                        // store the cost and corresponding
-                        assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(convolution_result, rotate_times * rotate_angle,
-                                cost_maps[kernel_seq][position[0]][position[1]], corresponding_angles[kernel_seq][position[0]][position[1]]);
+                        cost_maps[kernel_seq][position[0]][position[1]][feature_seq] = convolution_result;
 
                     }
                 }
