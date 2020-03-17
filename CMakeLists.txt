@@ -39,3 +39,6 @@ target_link_libraries(test ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tinyxml2_LIB})
 add_executable(gateway_training src/gateway_training.cpp)
 target_link_libraries(gateway_training ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tinyxml2_LIB})
 
+add_executable(test_svm src/test_svm.cpp)
+target_link_libraries(test_svm  ${OpenCV_LIBS} ${tinyxml2_LIB})
+

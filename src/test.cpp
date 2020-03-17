@@ -85,8 +85,6 @@ int main(int argc, char** argv)
     std::vector<std::string> filenames;
     getFileNames("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2", filenames, ".xml");
 
-
-
     std::string xml_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811112644.xml";
     std::string img_path;
     int img_width, img_height, img_depth;

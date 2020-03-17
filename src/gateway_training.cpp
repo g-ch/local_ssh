@@ -18,6 +18,10 @@
 #define KERNEL_X 13
 #define KERNEL_Y 21
 
+const float scale_factor = 0.8;
+const int scale_times = 3;
+const float rotate_angle = 15;
+const int rotate_times = 24;
 
 void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
 {
@@ -103,11 +107,10 @@ void generateTrainingData(std::string data_dir)
     positive_data_file.open(data_dir +"positive_data.csv", std::ios::out);
     negative_data_file.open(data_dir +"negative_data.csv", std::ios::out);
 
-    // define kernels for cost maps
     std::vector<Eigen::MatrixXf> kernels;
-    defineKernels(kernels);
+    defineKernels(kernels);  // define kernels for cost maps
 
-    unsigned seed;  // Random generator seed
+    unsigned seed;  // Random generator seed for collecting extra negative samples
     seed = time(0);
     srand(seed);
 
@@ -123,9 +126,7 @@ void generateTrainingData(std::string data_dir)
 
         /// Scale and rotate
         std::vector<std::vector<cv::Mat>> result_imgs;
-        float scale_factor = 0.8;
-        float rotate_angle = 30;
-        getScaledAndRotatedImgs(img_in, result_imgs, scale_factor, 3, rotate_angle, 12); //4, 24
+        getScaledAndRotatedImgs(img_in, result_imgs, scale_factor, scale_times, rotate_angle, rotate_times); //4, 24
 
         /// Get cost maps
         // Keep minimum three costs (using definition MAP_3D) and their corresponding angles
@@ -134,8 +135,8 @@ void generateTrainingData(std::string data_dir)
 
         getCostMaps(result_imgs, scale_factor, rotate_angle, kernels, cost_maps, corresponding_angles);
 
+        /// Add samples corresponding to the hand-labeled gateway position in csv files
         std::vector<Eigen::Vector2i> positive_sample_positions;
-
         for(const auto &object : objects){
             if(object.label == "gateway"){
                 const int gateway_x = (object.y_min + object.y_max)/2; ///Note the x in a image is y in a matrix
@@ -149,7 +150,7 @@ void generateTrainingData(std::string data_dir)
 //                cv::waitKey();
 
                 for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
-                    for(int feature_seq=0; feature_seq<cost_maps[kernel_seq][gateway_x][gateway_y].size(); feature_seq++){
+                    for(int feature_seq=0; feature_seq < cost_maps[kernel_seq][gateway_x][gateway_y].size(); feature_seq++){
                         positive_data_file << cost_maps[kernel_seq][gateway_x][gateway_y][feature_seq] << ",";
                     }
                 }
@@ -168,8 +169,8 @@ void generateTrainingData(std::string data_dir)
             }
         }
 
-        /// Add some more negative samples, 3 samples in one image
-        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<3; neg_extra_sample_seq++)
+        /// Add some more negative samples, 120 samples in one image
+        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<100; neg_extra_sample_seq++)
         {
             int pos_x = rand() % img_height;
             int pos_y = rand() % img_width;
@@ -228,14 +229,15 @@ void readCSVstoMat(const std::string positive_samples_csv_path, const std::strin
         return;
     }
 
-    // Define container
+    /// Define container
     const int data_size_x = line_num_positive + line_num_negative;
     const int data_size_y = elements_in_one_line_positive;
     mat_data = cv::Mat::zeros(data_size_x, data_size_y, CV_32FC1);
-    int positive_tag = 0, negative_tag = 1;
+    label = cv::Mat::zeros(data_size_x, 1, CV_32SC1);
+    int positive_tag = 1, negative_tag = -1;
     int line_seq = 0;
 
-    // Read positive data
+    /// Read positive data
     std::ifstream positive_file(positive_samples_csv_path);
     std::string positive_line;
     while(getline(positive_file, positive_line)){
@@ -250,11 +252,11 @@ void readCSVstoMat(const std::string positive_samples_csv_path, const std::strin
             mat_data.at<float>(line_seq, element_seq) = dd;
             element_seq ++;
         }
+        label.at<int>(line_seq, 0) = positive_tag;
         line_seq ++;
-        label.push_back(cv::Mat(1, 1, CV_32S, &positive_tag)); //label for positive sample is 0
     }
 
-    // Read negative data
+    /// Read negative data
     std::ifstream negative_file(negative_samples_csv_path);
     std::string negative_line;
     while(getline(negative_file, negative_line)){
@@ -269,10 +271,13 @@ void readCSVstoMat(const std::string positive_samples_csv_path, const std::strin
             mat_data.at<float>(line_seq, element_seq) = dd;
             element_seq ++;
         }
+        label.at<int>(line_seq, 0) = negative_tag;
         line_seq ++;
-        label.push_back(cv::Mat(1, 1, CV_32S, &negative_tag)); //label for negative sample is 1
     }
 
+//    std::cout << "-------------------------------------" <<std::endl;
+//    std::cout << label <<std::endl;
+//    std::cout << "-------------------------------------" <<std::endl;
 }
 
 
@@ -281,7 +286,8 @@ void trainingSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &data, cv::Mat &labels)
 //    std::cout << data << std::endl;
 //    std::cout << "label 187=" << labels[186]<<" ,label 188=" <<labels[188] << std::endl;
     model->setType(cv::ml::SVM::C_SVC);
-    model->setKernel(cv::ml::SVM::LINEAR);  //核函数，这里使用线性核
+    model->setKernel(cv::ml::SVM::RBF);  //核函数，这里使用线性核
+    model->setTermCriteria(cv::TermCriteria(cv::TermCriteria::MAX_ITER, 100, FLT_EPSILON));
 
     cv::Ptr<cv::ml::TrainData> tData = cv::ml::TrainData::create(data, cv::ml::ROW_SAMPLE, labels);
 
@@ -290,19 +296,90 @@ void trainingSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &data, cv::Mat &labels)
     std::cout << "SVM: train success ..." << std::endl;
 }
 
-void predictSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat test)
+void predictSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &test, cv::Mat &result)
 {
-    cv::Mat result;
     float rst = model->predict(test, result);
     for (int i = 0; i < result.rows; i++){
-        std::cout << result.at<float>(i, 0);
+        std::cout << result.at<float>(i, 0)<<" ";
     }
+    std::cout<<"\n rst is " << rst << std::endl;
+}
+
+float validateSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &test, cv::Mat &ground_truth)
+{
+    cv::Mat predicted_result;
+    predictSVM(model, test, predicted_result);
+    int right_num = 0, wrong_num = 0;
+    for(int i=0; i<predicted_result.rows; i++)
+    {
+        std::cout << ground_truth.at<int>(i,0) << " ";
+        if(predicted_result.at<int>(i,0) * ground_truth.at<int>(i,0) > 0){
+            right_num ++;
+        }else{
+            wrong_num ++;
+        }
+    }
+    float correct_ratio = (float)right_num / (right_num+wrong_num);
+    std::cout << std::endl<<"right_num="<<right_num<<", wrong_num="<<wrong_num<<std::endl;
+    std::cout << "validation correct_ratio is " << correct_ratio << std::endl;
+    return correct_ratio;
+}
+
+void imgTest(cv::Ptr<cv::ml::SVM> &model, cv::Mat &img_in)
+{
+    /// define kernels for cost maps
+    std::vector<Eigen::MatrixXf> kernels;
+    defineKernels(kernels);
+
+    /// Scale and rotate
+    std::vector<std::vector<cv::Mat>> result_imgs;
+    getScaledAndRotatedImgs(img_in, result_imgs, scale_factor, scale_times, rotate_angle, rotate_times); //4, 24
+
+    /// Get cost maps
+    // Keep minimum three costs (using definition MAP_3D) and their corresponding angles
+    std::vector<MAP_3D> cost_maps;
+    std::vector<MAP_3D> corresponding_angles;
+
+    getCostMaps(result_imgs, scale_factor, rotate_angle, kernels, cost_maps, corresponding_angles);
+
+    /// Transform to SVM input data
+    int pixels_num_for_test = cost_maps[0].size()*cost_maps[0][0].size();
+    int feature_length = cost_maps.size()*cost_maps[0][0][0].size();
+    cv::Mat test_mat = cv::Mat::zeros(pixels_num_for_test, feature_length, CV_32FC1);
+
+    for(int cost_seq_x=0; cost_seq_x<cost_maps[0].size(); cost_seq_x++){
+        for(int cost_seq_y=0; cost_seq_y<cost_maps[0][0].size(); cost_seq_y++){
+            //Iterate every pixel
+            int row_temp = cost_seq_x*cost_maps[0][0].size() + cost_seq_y;
+            for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
+                for(int feature_seq=0; feature_seq<cost_maps[0][0][0].size(); feature_seq++){
+                    int col_temp = kernel_seq*cost_maps[0][0][0].size()+feature_seq;
+                    test_mat.at<float>(row_temp, col_temp) = cost_maps[kernel_seq][cost_seq_x][cost_seq_y][feature_seq];
+                }
+            }
+        }
+    }
+
+    /// Predict
+    cv::Mat result;
+    float rst = model->predict(test_mat, result);
+
+    /// Draw the result
+    for(int i=0; i<img_in.rows;i+=1){
+        for(int j=0; j<img_in.cols; j+=1){
+            if(result.at<int>(i*img_in.cols +j,0) > 0){
+                cv::circle(img_in, cv::Point(j,i), 2, cv::Scalar(0), 1);
+            }
+        }
+    }
+    cv::imshow("img_in", img_in);
+    cv::waitKey();
 }
 
 int main(int argc, char** argv)
 {
 
-//    generateTrainingData("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/");
+    generateTrainingData("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/");
 
     cv::Mat data;
     cv::Mat labels;
@@ -310,10 +387,23 @@ int main(int argc, char** argv)
                   "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/negative_data.csv",
                   data, labels);
 
+    for(int i=0; i<data.rows; i++) {
+        std::cout << data.at<float>(i, 0) << " ";
+    }
+    std::cout << std::endl;
+
+    for(int i=0; i<labels.rows; i++) {
+        std::cout << labels.at<int>(i, 0) << " ";
+    }
+    std::cout << std::endl;
+
     cv::Ptr<cv::ml::SVM> model = cv::ml::SVM::create();
     trainingSVM(model, data, labels);
 
-    predictSVM(model, data);
+    validateSVM(model, data, labels);
+
+    cv::Mat img_in = cv::imread("/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/pow7resolution1.000000T1202811112649.png", cv::IMREAD_GRAYSCALE);
+    imgTest(model, img_in);
 
     std::cout << "Bye" << std::endl;
     return 0;
