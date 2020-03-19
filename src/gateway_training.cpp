@@ -18,6 +18,7 @@
 #define KERNEL_X 13
 #define KERNEL_Y 21
 
+
 const float scale_factor = 0.85;
 const int scale_times = 4;
 const float rotate_angle = 45;
@@ -226,7 +227,7 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
             int pos_y = rand() % img_width;
             Eigen::Vector2i point;
             point << pos_x, pos_y;
-            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 3)){
+            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 5)){
                 for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
                     for(int feature_seq=0; feature_seq<cost_maps[kernel_seq][pos_x][pos_y].size(); feature_seq++){
                         negative_data_file << cost_maps[kernel_seq][pos_x][pos_y][feature_seq] << ",";

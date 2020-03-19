@@ -159,7 +159,6 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
     }else{
         feature_size = transformed_images.size() * transformed_images[0].size();
     }
-
     for(int i=0; i<kernels.size();i++){
         MAP_XD cost_map(cost_map_size_x, std::vector< Eigen::VectorXf >(cost_map_size_y, Eigen::VectorXf::Zero(feature_size)));
         cost_maps.push_back(cost_map);
@@ -167,6 +166,7 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
     for(int j=0; j<kernels.size();j++){
         MAP_XD corresponding_angle(cost_map_size_x, std::vector< Eigen::VectorXf >(cost_map_size_y, Eigen::VectorXf::Zero(feature_size)));
         corresponding_angles.push_back(corresponding_angle);   ///CHG corresponding_angles has not been concerned in the following part
+
     }
 
     // Calculate cost maps
