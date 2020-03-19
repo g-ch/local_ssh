@@ -9,8 +9,9 @@
 #include <vector>
 #include "Eigen/Eigen"
 #include <opencv2/core/eigen.hpp>
+#include <cstdlib>
 
-typedef std::vector<std::vector<Eigen::Vector3f>> MAP_3D;
+typedef std::vector<std::vector<Eigen::VectorXf>> MAP_XD;
 
 void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
 {
@@ -34,6 +35,30 @@ void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
     dst = cv::Mat(dst,rect);
 }
 
+void addFixedValueNoise(cv::Mat& image, int value, int max_num = 60){
+    int number = rand() % max_num;
+    for(int k=0; k<number; k++){
+        int i = rand()%image.cols;
+        int j = rand()%image.rows;
+
+        if(image.channels() == 1){
+            image.at<uchar>(j,i) = value;
+        }else{
+            image.at<cv::Vec3b>(j,i)[0] = value;
+            image.at<cv::Vec3b>(j,i)[1] = value;
+            image.at<cv::Vec3b>(j,i)[2] = value;
+        }
+    }
+}
+
+void pepperAndSaltNoise(cv::Mat &src, cv::Mat &dist) {
+    src.copyTo(dist);
+    addFixedValueNoise(dist, 255, 50);
+    addFixedValueNoise(dist, 127, 100);
+//    addFixedValueNoise(dist, 0, 30);
+//    cv::imshow("dist", dist);
+//    cv::waitKey();
+}
 
 void getScaledAndRotatedImgs(cv::Mat src, std::vector<std::vector<cv::Mat>> &result, float scale_factor, int scale_times, float rotate_angle, int rotate_times)
 {
@@ -112,34 +137,8 @@ void exchangeValues(float &a, float &b){
     b = c;
 }
 
-bool assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(float value_to_insert, float corresponding_value,
-        Eigen::Vector3f &vector_to_rank, Eigen::Vector3f &vector_to_change_correspondingly)
-{
-    /// seq 0->2, small->large
-    /// Suppose vector_to_rank is well ranked before this function.
-    if(value_to_insert < vector_to_rank[2]){
-        vector_to_rank[2] = value_to_insert;
-        vector_to_change_correspondingly[2] = corresponding_value;
-    }else{
-        return false;
-    }
-    if(vector_to_rank[2] < vector_to_rank[1]){
-        exchangeValues(vector_to_rank[2], vector_to_rank[1]);
-        exchangeValues(vector_to_change_correspondingly[2], vector_to_change_correspondingly[1]);
-    }else{
-        return true;
-    }
-
-    if(vector_to_rank[1] < vector_to_rank[0]){
-        exchangeValues(vector_to_rank[1], vector_to_rank[0]);
-        exchangeValues(vector_to_change_correspondingly[1], vector_to_change_correspondingly[0]);
-    }else{
-        return true;
-    }
-}
-
 void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float scale_factor, float rotate_angle,
-        std::vector<Eigen::MatrixXf> &kernels, std::vector<MAP_3D> &cost_maps, std::vector<MAP_3D> &corresponding_angles)
+        std::vector<Eigen::MatrixXf> &kernels, std::vector<MAP_XD> &cost_maps, std::vector<MAP_XD> &corresponding_angles)
 {
     /// Size of all kernels should be the same and should be odds
     /// The resulted cost map has the same size as the image with no transformation
@@ -151,13 +150,23 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
     const int kernel_edge_y = (kernel_size_y - 1) / 2;
 
     // Initialize
+    int feature_size;
+    bool add_extra_differential_features = true; ///CHG
+    int neighbor_pixels_num = 4;
+
+    if(add_extra_differential_features){
+        feature_size = transformed_images.size() * transformed_images[0].size() + neighbor_pixels_num; /// Add differential with 8 neighbourhood pixels
+    }else{
+        feature_size = transformed_images.size() * transformed_images[0].size();
+    }
+
     for(int i=0; i<kernels.size();i++){
-        MAP_3D cost_map(cost_map_size_x, std::vector< Eigen::Vector3f >(cost_map_size_y, Eigen::Vector3f::Zero()));
+        MAP_XD cost_map(cost_map_size_x, std::vector< Eigen::VectorXf >(cost_map_size_y, Eigen::VectorXf::Zero(feature_size)));
         cost_maps.push_back(cost_map);
     }
     for(int j=0; j<kernels.size();j++){
-        MAP_3D corresponding_angle(cost_map_size_x, std::vector< Eigen::Vector3f >(cost_map_size_y, Eigen::Vector3f::Zero()));
-        corresponding_angles.push_back(corresponding_angle);
+        MAP_XD corresponding_angle(cost_map_size_x, std::vector< Eigen::VectorXf >(cost_map_size_y, Eigen::VectorXf::Zero(feature_size)));
+        corresponding_angles.push_back(corresponding_angle);   ///CHG corresponding_angles has not been concerned in the following part
     }
 
     // Calculate cost maps
@@ -173,6 +182,9 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
 
                 Eigen::MatrixXf img_matrix_this(image_this_size_x, image_this_size_y);
                 cv::cv2eigen(transformed_images[scaled_times][rotate_times], img_matrix_this);
+
+                int feature_seq = scaled_times * transformed_images[scaled_times].size() + rotate_times;
+
                 // Start to do convolution operations for each image
                 for(int i=0; i<=image_this_size_x-kernel_size_x; i++){
                     for(int j=0; j<=image_this_size_y-kernel_size_y;j++){
@@ -189,15 +201,79 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
                         Eigen::Vector2i position = getPositionBeforeOrientationAndScale(image_this_size_x, image_this_size_y,
                                  scale_factor, scaled_times, rotate_angle, rotate_times, position_src);
 
-
-                        // store the cost and corresponding
-                        assertAndRankinOneVectorandChangeAnotherVectorCorrespondingly(convolution_result, rotate_times * rotate_angle,
-                                cost_maps[kernel_seq][position[0]][position[1]], corresponding_angles[kernel_seq][position[0]][position[1]]);
+                        cost_maps[kernel_seq][position[0]][position[1]][feature_seq] = convolution_result;
 
                     }
                 }
             }
         }
+    }
+
+
+    /// Add differential
+    if(add_extra_differential_features)
+    {
+        std::vector<std::vector<std::vector<float>>> minimum_costs;
+        for(int i=0; i<kernels.size(); i++){
+            std::vector<std::vector<float>> minimum_cost_one_kernel(cost_map_size_x, std::vector<float>(cost_map_size_y, 0.f));
+            minimum_costs.push_back(minimum_cost_one_kernel);
+        }
+
+        for(int kernel_seq = 0; kernel_seq < kernels.size(); kernel_seq++){
+            for(int map_x=0; map_x < cost_map_size_x; map_x++){
+                for(int map_y=0; map_y < cost_map_size_y; map_y++){
+                    minimum_costs[kernel_seq][map_x][map_y] = cost_maps[kernel_seq][map_x][map_y].minCoeff();
+                }
+            }
+        }
+
+        int extra_feature_start_num = transformed_images.size() * transformed_images[0].size();
+        for(int kernel_seq = 0; kernel_seq < kernels.size(); kernel_seq++){
+            for(int map_x=0; map_x < cost_map_size_x; map_x++){
+                for(int map_y=0; map_y < cost_map_size_y; map_y++){
+                    if(map_x == 0 || map_x == cost_map_size_x-1 || map_y == 0 || map_y == cost_map_size_y-1){  //edge
+                        for(int i=0; i<neighbor_pixels_num; i++){
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num + i] = 0.f;
+                        }
+                    }else{
+                        if(neighbor_pixels_num == 8){
+                            // Top left
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x-1][map_y-1];
+                            // Top
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+1] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x-1][map_y];
+                            // Top right
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+2] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x-1][map_y+1];
+                            // Right
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+3] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x][map_y+1];
+                            // Right bottom
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+4] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x+1][map_y+1];
+                            // Bottom
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+5] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x+1][map_y];
+                            // Left bottom
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+6] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x+1][map_y-1];
+                            // Left
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+7] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x][map_y-1];
+                        }else{
+                            // Top
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x-1][map_y];
+                            // Right
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+3] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x][map_y+1];
+                            // Bottom
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+1] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x+1][map_y];
+                            // Left
+                            cost_maps[kernel_seq][map_x][map_y][extra_feature_start_num+2] = minimum_costs[kernel_seq][map_x][map_y] - minimum_costs[kernel_seq][map_x][map_y-1];
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    static bool print_feature_dimension = true;
+    if(print_feature_dimension){
+        std::cout << "feature_dimension = " << cost_maps[0][0][0].size() * kernels.size() << std::endl;
+        print_feature_dimension = false;
     }
 
     std::cout << "cost map finished" << std::endl;
