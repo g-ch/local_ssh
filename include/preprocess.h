@@ -12,6 +12,36 @@
 
 typedef std::vector<std::vector<Eigen::Vector3f>> MAP_3D;
 
+
+void turnBlacktoGray(cv::Mat &src){
+    int nr=src.rows;
+    int nc=src.cols;
+
+    for(int i=0; i<nr ;i++){
+        auto* in_src = src.ptr<uchar>(i); // float
+        for(int j=0; j<nc; j++){
+            if(in_src[j] < 127){
+                in_src[j] = 127;
+            }
+        }
+    }
+}
+
+void turnGraytoBlack(cv::Mat &src){
+    int nr=src.rows;
+    int nc=src.cols;
+
+    for(int i=0; i<nr ;i++){
+        auto* in_src = src.ptr<uchar>(i); // float
+        for(int j=0; j<nc; j++){
+            if(in_src[j] < 150){
+                in_src[j] = 0;
+            }
+        }
+    }
+}
+
+
 void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
 {
     float radian = (float) (angle /180.0 * CV_PI);

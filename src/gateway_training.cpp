@@ -14,14 +14,16 @@
 #include <cstdlib>
 #include <ctime>
 #include <opencv2/ml.hpp>
+#include "voronoi_skeleton_points.h"
 
 #define KERNEL_X 13
 #define KERNEL_Y 21
 
-const float scale_factor = 0.8;
+const float scale_factor = 0.85;
 const int scale_times = 3;
-const float rotate_angle = 30;
-const int rotate_times = 12;
+const float rotate_angle = 45;
+const int rotate_times = 8;
+
 
 void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
 {
@@ -42,7 +44,7 @@ void getFileNames(std::string path, std::vector<std::string>& filenames, std::st
             position = file_name_temp.find(required_type);
             if(position != file_name_temp.npos){
                 std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
-                std::cout << file_name_temp2 << std::endl;
+//                std::cout << file_name_temp2 << std::endl;
                 filenames.push_back(file_name_temp2);
             }
         }
@@ -61,6 +63,27 @@ bool ifCloseToAnyPointInVector(Eigen::Vector2i p, const std::vector<Eigen::Vecto
 
     return false;
 }
+
+float pointSquareDistance(cv::Point p1, cv::Point p2){
+    return (p1.x - p2.x)*(p1.x - p2.x) + (p1.y - p2.y)*(p1.y - p2.y);
+}
+
+
+cv::Point findNearestPoint(cv::Point &p, std::vector<cv::Point> &reference_points){
+    const int reference_points_size = reference_points.size();
+    float min_distance = 100000000.f;
+    int min_seq = 0;
+    for(int i=0; i<reference_points_size; i++){
+        float distance_this = pointSquareDistance(p, reference_points[i]);
+        if(distance_this < min_distance){
+            min_distance = distance_this;
+            min_seq = i;
+        }
+    }
+
+    return reference_points[min_seq];
+}
+
 
 void defineKernels(std::vector<Eigen::MatrixXf> &kernels)
 {
@@ -91,8 +114,42 @@ void defineKernels(std::vector<Eigen::MatrixXf> &kernels)
     kernel3.block(7, 6, 6, 15) = Eigen::MatrixXf::Constant(6, 15, -0.5);
 //    std::cout << std::endl << kernel3 << std::endl;
     kernels.push_back(kernel3);
+
+    /*Kernel 3*/
+//    Eigen::MatrixXf kernel4 = Eigen::MatrixXf::Ones(KERNEL_X, KERNEL_Y); //11 rows, 21 cols
+////    std::cout << std::endl << kernel4 << std::endl;
+//    kernels.push_back(kernel4);
 }
 
+
+void defineSumKernels(std::vector<Eigen::MatrixXf> &kernels)
+{
+    /*Kernel 1*/
+    Eigen::MatrixXf kernel1 = Eigen::MatrixXf::Zero(KERNEL_X, KERNEL_Y); //13 rows, 21 cols
+    kernel1.block(0, 0, 7, 6) = Eigen::MatrixXf::Constant(7, 6,1.f);
+    kernels.push_back(kernel1);
+
+    /*Kernel 2*/
+    Eigen::MatrixXf kernel2 = Eigen::MatrixXf::Zero(KERNEL_X, KERNEL_Y); //13 rows, 21 cols
+    kernel2.block(7, 0, 6, 6) = Eigen::MatrixXf::Constant(6, 6,1.f);
+    kernels.push_back(kernel2);
+
+    /*Kernel 3*/
+    Eigen::MatrixXf kernel3 = Eigen::MatrixXf::Zero(KERNEL_X, KERNEL_Y); //13 rows, 21 cols
+    kernel3.block(0, 15, 7, 6) = Eigen::MatrixXf::Constant(7, 6,1.f);
+    kernels.push_back(kernel3);
+
+    /*Kernel 4*/
+    Eigen::MatrixXf kernel4 = Eigen::MatrixXf::Zero(KERNEL_X, KERNEL_Y); //13 rows, 21 cols
+    kernel4.block(7, 15, 6, 6) = Eigen::MatrixXf::Constant(6, 6,1.f);
+    kernels.push_back(kernel4);
+
+    /*Kernel 5*/
+    Eigen::MatrixXf kernel5 = Eigen::MatrixXf::Zero(KERNEL_X, KERNEL_Y); //13 rows, 21 cols
+    kernel5.block(0, 6, 13, 9) = Eigen::MatrixXf::Constant(13, 9,1.f);
+    kernels.push_back(kernel5);
+
+}
 
 void generateTrainingData(std::string data_dir)
 {
@@ -109,6 +166,7 @@ void generateTrainingData(std::string data_dir)
 
     std::vector<Eigen::MatrixXf> kernels;
     defineKernels(kernels);  // define kernels for cost maps
+//    defineSumKernels(kernels);
 
     unsigned seed;  // Random generator seed for collecting extra negative samples
     seed = time(0);
@@ -122,7 +180,26 @@ void generateTrainingData(std::string data_dir)
         std::vector<Object> objects;
         readLabelIMGObjectDetectionXML(xml_path, img_path, img_width, img_height, img_depth, objects);
 
+        /// Abort if there is no gateway
+        int labeled_gateway_counter = 0;
+        for(const auto &object : objects){
+            if(object.label == "gateway"){
+                labeled_gateway_counter ++;
+            }
+        }
+        if(labeled_gateway_counter < 1) continue;
+
+        /// Read image and find skeleton points
         cv::Mat img_in = cv::imread(img_path, cv::IMREAD_GRAYSCALE);
+        turnBlacktoGray(img_in); // CHG
+
+        std::vector<cv::Point> skeleton_points;
+        findVoronoiSkeletonPoints(img_in, skeleton_points);  /// CHG
+        if(skeleton_points.size() < 2){
+            std::cout << "Found no skeleton_points in file " <<  img_path << ", skip!" << std::endl;
+            continue;
+        }
+
 
         /// Scale and rotate
         std::vector<std::vector<cv::Mat>> result_imgs;
@@ -139,8 +216,12 @@ void generateTrainingData(std::string data_dir)
         std::vector<Eigen::Vector2i> positive_sample_positions;
         for(const auto &object : objects){
             if(object.label == "gateway"){
-                const int gateway_x = (object.y_min + object.y_max)/2; ///Note the x in a image is y in a matrix
-                const int gateway_y = (object.x_min + object.x_max)/2;
+                /// Use nearest skeleton point to correct hand label error
+                cv::Point gateway_img_pos((object.x_min + object.x_max)/2, (object.y_min + object.y_max)/2);
+                cv::Point nearest_skeleton = findNearestPoint(gateway_img_pos, skeleton_points);
+
+                const int gateway_x = nearest_skeleton.y; ///Note the x in a image is y in a matrix
+                const int gateway_y = nearest_skeleton.x;
                 Eigen::Vector2i gateway_pos;
                 gateway_pos << gateway_x, gateway_y;
                 positive_sample_positions.push_back(gateway_pos);
@@ -155,7 +236,6 @@ void generateTrainingData(std::string data_dir)
                     }
                 }
                 positive_data_file << "\n";
-
             }else{
                 const int other_label_x = (object.y_min + object.y_max)/2;
                 const int other_label_y = (object.x_min + object.x_max)/2;
@@ -170,23 +250,36 @@ void generateTrainingData(std::string data_dir)
         }
 
         /// Add some more negative samples, 120 samples in one image
-        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<120; neg_extra_sample_seq++)
+        int extra_negative_sample_num = 50;
+        int max_negative_sample_num = skeleton_points.size() - positive_sample_positions.size();
+        extra_negative_sample_num = std::min(max_negative_sample_num, extra_negative_sample_num);
+
+        int time_out_seq = 0;
+        for(int neg_extra_sample_seq=0; neg_extra_sample_seq<extra_negative_sample_num; neg_extra_sample_seq++)
         {
-            int pos_x = rand() % img_height;
-            int pos_y = rand() % img_width;
+            int random_seq = rand() % skeleton_points.size();
+
             Eigen::Vector2i point;
-            point << pos_x, pos_y;
-            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 3)){
-                for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
-                    for(int feature_seq=0; feature_seq<cost_maps[kernel_seq][pos_x][pos_y].size(); feature_seq++){
-                        negative_data_file << cost_maps[kernel_seq][pos_x][pos_y][feature_seq] << ",";
+            point << skeleton_points[random_seq].y, skeleton_points[random_seq].x;
+
+            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, 3)) {
+                // Add to feature csv file
+                for (int kernel_seq = 0; kernel_seq < kernels.size(); kernel_seq++) {
+                    for (int feature_seq = 0;
+                         feature_seq < cost_maps[kernel_seq][point(0)][point(1)].size(); feature_seq++) {
+                        negative_data_file << cost_maps[kernel_seq][point(0)][point(1)][feature_seq] << ",";
                     }
                 }
                 negative_data_file << "\n";
             }else{
                 neg_extra_sample_seq --;
+                time_out_seq ++;
             }
 
+            if(time_out_seq > 100) {
+                std::cout << "Time out error. Can not generate more negative samples." <<std::endl;
+                break;
+            }
         }
 
     }
@@ -327,9 +420,18 @@ float validateSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &test, cv::Mat &ground_tr
 
 void imgTest(cv::Ptr<cv::ml::SVM> &model, cv::Mat &img_in)
 {
+    /// Extract skeleton points
+    std::vector<cv::Point> skeleton_points;
+    findVoronoiSkeletonPoints(img_in, skeleton_points);  /// CHG
+    if(skeleton_points.size() < 1){
+        std::cout << "Found no skeleton_points in this image, skip!" << std::endl;
+        return;
+    }
+
     /// define kernels for cost maps
     std::vector<Eigen::MatrixXf> kernels;
     defineKernels(kernels);
+//    defineSumKernels(kernels);
 
     /// Scale and rotate
     std::vector<std::vector<cv::Mat>> result_imgs;
@@ -347,31 +449,36 @@ void imgTest(cv::Ptr<cv::ml::SVM> &model, cv::Mat &img_in)
     int feature_length = cost_maps.size()*cost_maps[0][0][0].size();
     cv::Mat test_mat = cv::Mat::zeros(pixels_num_for_test, feature_length, CV_32FC1);
 
-    for(int cost_seq_x=0; cost_seq_x<cost_maps[0].size(); cost_seq_x++){
-        for(int cost_seq_y=0; cost_seq_y<cost_maps[0][0].size(); cost_seq_y++){
-            //Iterate every pixel
-            int row_temp = cost_seq_x*cost_maps[0][0].size() + cost_seq_y;
-            for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
-                for(int feature_seq=0; feature_seq<cost_maps[0][0][0].size(); feature_seq++){
-                    int col_temp = kernel_seq*cost_maps[0][0][0].size()+feature_seq;
-                    test_mat.at<float>(row_temp, col_temp) = cost_maps[kernel_seq][cost_seq_x][cost_seq_y][feature_seq];
-                }
+    for(int row_seq=0; row_seq<skeleton_points.size(); row_seq++){
+        int cost_seq_x = skeleton_points[row_seq].y;
+        int cost_seq_y = skeleton_points[row_seq].x;
+        for(int kernel_seq=0; kernel_seq<kernels.size(); kernel_seq++){
+            for(int feature_seq=0; feature_seq<cost_maps[0][0][0].size(); feature_seq++){
+                int col_seq = kernel_seq*cost_maps[0][0][0].size()+feature_seq;
+                test_mat.at<float>(row_seq, col_seq) = cost_maps[kernel_seq][cost_seq_x][cost_seq_y][feature_seq];
             }
         }
     }
 
     /// Predict
+    clock_t start_time, end_time;
     cv::Mat result;
+    start_time = clock();
     float rst = model->predict(test_mat, result);
+    end_time = clock();
+    std::cout << "Predict Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
 
     /// Draw the result
-    for(int i=0; i<img_in.rows;i+=1){
-        for(int j=0; j<img_in.cols; j+=1){
-            if(result.at<int>(i*img_in.cols +j,0) > 0){
-                cv::circle(img_in, cv::Point(j,i), 2, cv::Scalar(0), 1);
-            }
+    int gateway_num = 0;
+    for(int row_seq=0; row_seq<skeleton_points.size(); row_seq++){
+        if(result.at<int>(row_seq,0) > 0){
+            cv::circle(img_in, skeleton_points[row_seq], 2, cv::Scalar(0), 1);
+            gateway_num ++;
         }
     }
+
+    std::cout << "Found " << gateway_num <<" gateways" << std::endl;
+
 }
 
 int main(int argc, char** argv)
@@ -403,7 +510,9 @@ int main(int argc, char** argv)
     clock_t start_time, end_time;
 
     for(const auto &image_to_test : test_image_names){
+
         cv::Mat img_in = cv::imread(test_images_path+image_to_test, cv::IMREAD_GRAYSCALE);
+        turnBlacktoGray(img_in);
 
         start_time = clock();
         imgTest(model, img_in);
