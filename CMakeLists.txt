@@ -40,8 +40,14 @@ target_link_libraries(test ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tinyxml2_LIB})
 add_executable(gateway_training src/gateway_training.cpp)
 target_link_libraries(gateway_training  ${OpenCV_LIBS} ${tinyxml2_LIB})
 
+add_executable(gateway_training_gvg src/gateway_training_gvg.cpp)
+target_link_libraries(gateway_training_gvg  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
 add_executable(gateway_cnn_training src/gateway_cnn_training.cpp)
 target_link_libraries(gateway_cnn_training  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(rect_classification src/rect_classification.cpp)
+target_link_libraries(rect_classification  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(test_svm src/test_svm.cpp)
 target_link_libraries(test_svm  ${OpenCV_LIBS} ${tinyxml2_LIB})

@@ -16,36 +16,8 @@
 
 using namespace tiny_dnn;
 
-#define RECT_SIZE_X 16
-#define RECT_SIZE_Y 16
-
-void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
-{
-    /// The required_type should be like ".jpg" or ".xml".
-    DIR *pDir;
-    struct dirent* ptr;
-    if(!(pDir = opendir(path.c_str()))){
-        std::cout<<"Folder doesn't Exist!"<<std::endl;
-        return;
-    }
-
-    while((ptr = readdir(pDir)) != 0){
-        std::string file_name_temp = ptr->d_name;
-        if(required_type==".all"){
-            filenames.push_back(file_name_temp);
-        }else{
-            std::string::size_type position;
-            position = file_name_temp.find(required_type);
-            if(position != file_name_temp.npos){
-                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
-//                std::cout << file_name_temp2 << std::endl;
-                filenames.push_back(file_name_temp2);
-            }
-        }
-
-    }
-    closedir(pDir);
-}
+#define RECT_SIZE_X 24
+#define RECT_SIZE_Y 24
 
 bool ifCloseToAnyPointInVector(cv::Point p, const std::vector<cv::Point>& v, const float threshold){
     for(const auto &point : v){
@@ -206,22 +178,25 @@ static void construct_net(network<sequential>& nn) {
 #undef X
 
     core::backend_t backend_type = core::default_engine();
-    nn << conv(RECT_SIZE_X, RECT_SIZE_Y, 5, 1, 6,   // C1, 1@16x16-in, 6@12x12-out
+    nn << conv(RECT_SIZE_X, RECT_SIZE_Y, 5, 1, 6,   // C1, 1@24x24-in, 6@20x20-out
                padding::valid, true, 1, 1, 1, 1, backend_type)
        << relu()
-       << ave_pool(12, 12, 6, 2)   // S2, 6@12x12-in, 6@6x6-out
+       << ave_pool(20, 20, 6, 2)   // S2, 6@20x20-in, 6@10x10-out
        << relu()
-       << conv(6, 6, 3, 6, 16,
-               connection_table(tbl, 6, 16),// C3, 6@6x6-in, 16@4x4-out
+       << conv(10, 10, 3, 6, 16,
+               connection_table(tbl, 6, 16),// C3, 6@10x10-in, 16@8x8-out
                padding::valid, true, 1, 1, 1, 1, backend_type)
        << relu()
-       << ave_pool(4, 4, 16, 2)  // S4, 16@10x10-in, 16@2x2-out
+       << ave_pool(8, 8, 16, 2)   // S4, 16@8x8-in, 6@4x4-out
        << relu()
-       << conv(2, 2, 2, 16, 64,   // C5, 16@2x2-in, 64@1x1-out
+       << conv(4, 4, 3, 16, 64,   // C4, 16@4x4-in, 64@2x2-out
                padding::valid, true, 1, 1, 1, 1, backend_type)
        << relu()
-       << fc(64, 2, true, backend_type)  // F6, 64-in, 2-out
-       << relu();
+       << conv(2, 2, 2, 64, 128,   // C5, 64@2x2-in, 128@1x1-out
+               padding::valid, true, 1, 1, 1, 1, backend_type)
+       << relu()
+       << fc(128, 2, true, backend_type)  // F6, 128-in, 2-out
+       << tanh();
 }
 
 static void construct_net_two_layers(network<sequential>& nn) {
@@ -298,39 +273,37 @@ static void train_lenet(tiny_dnn::network<tiny_dnn::sequential> &nn,
 
 int main(){
 
-    /*
-    /// Generating training data
-    std::string data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
-    std::vector<cv::Mat> img_rects;
-    std::vector<int> labels_ori;
-    generateTrainingData(data_dir, img_rects, labels_ori, 10);
+//    /// Generating training data
+//    std::string data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
+//    std::vector<cv::Mat> img_rects;
+//    std::vector<int> labels_ori;
+//    generateTrainingData(data_dir, img_rects, labels_ori, 6);
+//
+//    std::vector<vec_t> trainging_data;
+//    convert_images(img_rects, trainging_data);
+//    std::vector<label_t> trainging_labels;
+//    convert_labels(labels_ori, trainging_labels);
+//
+//    /// Generating Validation data
+//    std::string testing_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2_test/";
+//    std::vector<cv::Mat> testing_img_rects;
+//    std::vector<int> testing_labels_ori;
+//    generateTrainingData(testing_data_dir, testing_img_rects, testing_labels_ori, 3);
+//
+//    std::vector<vec_t> testing_data;
+//    convert_images(testing_img_rects, testing_data);
+//    std::vector<label_t> testing_labels;
+//    convert_labels(testing_labels_ori, testing_labels);
+//
+//    /// Training
+//    tiny_dnn::network<tiny_dnn::sequential> nn;
+//    train_lenet(nn, trainging_data, trainging_labels, testing_data, testing_labels, 1.0, 100, 32);
 
-    std::vector<vec_t> trainging_data;
-    convert_images(img_rects, trainging_data);
-    std::vector<label_t> trainging_labels;
-    convert_labels(labels_ori, trainging_labels);
-
-    /// Generating Validation data
-    std::string testing_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2_test/";
-    std::vector<cv::Mat> testing_img_rects;
-    std::vector<int> testing_labels_ori;
-    generateTrainingData(testing_data_dir, testing_img_rects, testing_labels_ori, 3);
-
-    std::vector<vec_t> testing_data;
-    convert_images(testing_img_rects, testing_data);
-    std::vector<label_t> testing_labels;
-    convert_labels(testing_labels_ori, testing_labels);
-
-    /// Training
-    tiny_dnn::network<tiny_dnn::sequential> nn;
-    train_lenet(nn, trainging_data, trainging_labels, testing_data, testing_labels, 1.0, 100, 32);
-
-    */
     /**----------------------------------------------**/
 
     /// Load model and testing
     tiny_dnn::network<tiny_dnn::sequential> model;
-    model.load("LeNet-model-part-data-slow-found-nothing");
+    model.load("LeNet-model");
     std::cout << "Model loaded!" << std::endl;
 
     /// Testing on images and show
@@ -366,10 +339,6 @@ int main(){
         cv::imshow("image_this_copy", image_this_copy);
         cv::waitKey();
     }
-
-
-
-//    model.predict_label()
 
     return 0;
 }

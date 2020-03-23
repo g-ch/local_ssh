@@ -7,64 +7,26 @@
 #include <ctime>
 #include <string>
 #include <cmath>
-#include "labelimg_xml_reader.h"
 #include <dirent.h>
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
 #include <ctime>
 #include <opencv2/ml.hpp>
+#include "labelimg_xml_reader.h"
 
 #define KERNEL_X 13
 #define KERNEL_Y 21
-
+#define EDGE_X 6
+#define EDGE_Y 10
 
 const float scale_factor = 0.85;
 const int scale_times = 4;
-const float rotate_angle = 45;
-const int rotate_times = 8;
+const float rotate_angle = 30;
+const int rotate_times = 12;
 
-void turnBlacktoGray(cv::Mat &src){
-    int nr=src.rows;
-    int nc=src.cols;
-
-    for(int i=0; i<nr ;i++){
-        auto* in_src = src.ptr<uchar>(i); // float
-        for(int j=0; j<nc; j++){
-            if(in_src[j] < 127){
-                in_src[j] = 127;
-            }
-        }
-    }
-}
-
-void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
-{
-    /// The required_type should be like ".jpg" or ".xml".
-    DIR *pDir;
-    struct dirent* ptr;
-    if(!(pDir = opendir(path.c_str()))){
-        std::cout<<"Folder doesn't Exist!"<<std::endl;
-        return;
-    }
-
-    while((ptr = readdir(pDir)) != 0){
-        std::string file_name_temp = ptr->d_name;
-        if(required_type==".all"){
-            filenames.push_back(file_name_temp);
-        }else{
-            std::string::size_type position;
-            position = file_name_temp.find(required_type);
-            if(position != file_name_temp.npos){
-                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
-//                std::cout << file_name_temp2 << std::endl;
-                filenames.push_back(file_name_temp2);
-            }
-        }
-
-    }
-    closedir(pDir);
-}
+bool use_noised_data = false;
+bool use_rotated_data = false;
 
 bool ifCloseToAnyPointInVector(Eigen::Vector2i p, const std::vector<Eigen::Vector2i>& v, const float threshold){
     for(const auto &point : v){
@@ -146,7 +108,6 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
         /// Generate noised dat
         std::vector<MAP_XD> noised_cost_maps;
         std::vector<MAP_XD> noised_corresponding_angles;
-        bool use_noised_data = false;  ///CHG
 
         if(use_noised_data){
             cv::Mat noised_img;
@@ -250,6 +211,101 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
 
         }
 
+        /// Add samples from rotated images ***********************
+        if(use_rotated_data){
+            std::vector<std::vector<cv::Mat>> rotate_result_imgs;
+            const float Rotate_Angle = 45;
+            const int Rotate_Times = 8;
+            getScaledAndRotatedImgs(img_in, rotate_result_imgs, 1, 1, Rotate_Angle, Rotate_Times); //4, 24
+
+            const int img_center_x = img_in.cols / 2;
+            const int img_center_y = img_in.rows / 2;
+
+            for (int rotated_seq = 0; rotated_seq < rotate_result_imgs[0].size(); rotated_seq++) {
+
+                std::vector<std::vector<cv::Mat>> rotate_result_imgs_rotate_scale_results;
+                getScaledAndRotatedImgs(rotate_result_imgs[0][rotated_seq], rotate_result_imgs_rotate_scale_results, scale_factor, scale_times, rotate_angle, rotate_times);
+
+                std::vector<MAP_XD> cost_maps_this_rotate;
+                std::vector<MAP_XD> corresponding_angles_this_rotate;
+                getCostMaps(rotate_result_imgs_rotate_scale_results, scale_factor, rotate_angle, kernels, cost_maps_this_rotate,
+                            corresponding_angles_this_rotate);
+
+                std::vector<Eigen::Vector2i> positive_sample_positions_this_rotate;
+                for (const auto &object : objects) {
+
+                    int gateway_x = (object.x_min + object.x_max) / 2;
+                    int gateway_y = (object.y_min + object.y_max) / 2;
+
+                    float rotate_angle_rad = Rotate_Angle / 180 * CV_PI;
+
+                    float rotated_total_angle = rotate_angle_rad * rotated_seq;
+                    int gateway_y_this = (gateway_x - img_center_x) * cos(rotated_total_angle) +
+                                         (gateway_y - img_center_y) * sin(rotated_total_angle) + img_center_x;
+                    int gateway_x_this = -(gateway_x - img_center_x) * sin(rotated_total_angle) +
+                                         (gateway_y - img_center_y) * cos(rotated_total_angle) + img_center_y;
+
+                    if(gateway_x_this < EDGE_X || gateway_x_this > cost_maps_this_rotate[0].size()-EDGE_X ||
+                       gateway_y_this < EDGE_Y || gateway_y_this > cost_maps_this_rotate[0][0].size()-EDGE_Y){
+                        continue;
+                    }
+
+//                cv::circle(rotate_result_imgs[0][rotated_seq], cv::Point(gateway_y_this, gateway_x_this), 2, cv::Scalar(0), 1);
+//                cv::imshow("rotate_result_imgs[0][rotated_seq]", rotate_result_imgs[0][rotated_seq]);
+//                cv::waitKey();
+
+
+                    Eigen::Vector2i gateway_pos;
+                    gateway_pos << gateway_x_this, gateway_y_this;
+                    positive_sample_positions_this_rotate.push_back(gateway_pos);
+
+                    if (object.label == "gateway") {
+                        for (int kernel_seq = 0; kernel_seq < kernels.size(); kernel_seq++) {
+                            for (int feature_seq = 0; feature_seq <
+                                                      cost_maps_this_rotate[kernel_seq][gateway_x_this][gateway_y_this].size(); feature_seq++) {
+                                positive_data_file
+                                        << cost_maps_this_rotate[kernel_seq][gateway_x_this][gateway_y_this][feature_seq]
+                                        << ",";
+                            }
+                        }
+                        positive_data_file << "\n";
+                    } else {
+                        for (int kernel_seq = 0; kernel_seq < kernels.size(); kernel_seq++) {
+                            for (int feature_seq = 0; feature_seq <
+                                                      cost_maps_this_rotate[kernel_seq][gateway_x_this][gateway_y_this].size(); feature_seq++) {
+                                negative_data_file
+                                        << cost_maps_this_rotate[kernel_seq][gateway_x_this][gateway_y_this][feature_seq]
+                                        << ",";
+                            }
+                        }
+                        negative_data_file << "\n";
+                    }
+                }
+
+                /// Add some more negative samples, "extra_negative_sample_num" samples per rotated image
+                for (int neg_extra_sample_seq = 0;
+                     neg_extra_sample_seq < extra_negative_sample_num; neg_extra_sample_seq++) {
+                    int pos_x = rand() % img_height;
+                    int pos_y = rand() % img_width;
+                    Eigen::Vector2i point;
+                    point << pos_x, pos_y;
+                    if (!ifCloseToAnyPointInVector(point, positive_sample_positions_this_rotate, 5)) {
+                        for (int kernel_seq = 0; kernel_seq < kernels.size(); kernel_seq++) {
+                            for (int feature_seq = 0;
+                                 feature_seq < cost_maps_this_rotate[kernel_seq][pos_x][pos_y].size(); feature_seq++) {
+                                negative_data_file << cost_maps_this_rotate[kernel_seq][pos_x][pos_y][feature_seq] << ",";
+                            }
+                        }
+                        negative_data_file << "\n";
+                    } else {
+                        neg_extra_sample_seq--;
+                    }
+                }
+
+                /// ***********************************
+            }
+
+        }
     }
 
     positive_data_file.close();
@@ -347,7 +403,7 @@ void trainingSVM(cv::Ptr<cv::ml::SVM> &model, cv::Mat &data, cv::Mat &labels)
 //    std::cout << data << std::endl;
 //    std::cout << "label 187=" << labels[186]<<" ,label 188=" <<labels[188] << std::endl;
     model->setType(cv::ml::SVM::C_SVC);
-    model->setKernel(cv::ml::SVM::RBF);  //核函数，这里使用线性核
+    model->setKernel(cv::ml::SVM::RBF);
     model->setTermCriteria(cv::TermCriteria(cv::TermCriteria::MAX_ITER, 100, FLT_EPSILON));
 
     cv::Ptr<cv::ml::TrainData> tData = cv::ml::TrainData::create(data, cv::ml::ROW_SAMPLE, labels);
@@ -443,10 +499,11 @@ void imgTest(cv::Ptr<cv::ml::SVM> &model, cv::Mat &img_in)
 
 int main(int argc, char** argv)
 {
+
     /// Generating training data
     std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
 
-    generateTrainingData(training_data_path, 20);
+    generateTrainingData(training_data_path, 8);
 
     /// Read training data
     cv::Mat data;
@@ -459,6 +516,9 @@ int main(int argc, char** argv)
     cv::Ptr<cv::ml::SVM> model = cv::ml::SVM::create();
     trainingSVM(model, data, labels);
 
+    /// Save model
+    model->save("svm_model.xml");
+
     ///Validating
     std::string validation_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2_test/";
     generateTrainingData(validation_data_path, 5);
@@ -469,7 +529,10 @@ int main(int argc, char** argv)
                   validation_data, validation_labels);
 
     validateSVM(model, validation_data, validation_labels);
-//    validateSVM(model, data, labels);
+    validateSVM(model, data, labels);
+
+    /// Load model
+    cv::Ptr<cv::ml::SVM> model_loaded = cv::ml::StatModel::load<cv::ml::SVM>("svm_model.xml");
 
     /// Testing with images
     std::string test_images_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2_test/";  // Floor2_test
@@ -477,19 +540,37 @@ int main(int argc, char** argv)
     getFileNames(test_images_path, test_image_names, ".png");
     clock_t start_time, end_time;
 
+
     for(const auto &image_to_test : test_image_names){
         cv::Mat img_in = cv::imread(test_images_path+image_to_test, cv::IMREAD_GRAYSCALE);
         turnBlacktoGray(img_in);
 
+        std::vector<std::vector<cv::Mat>> transformed_imgs;
+        getScaledAndRotatedImgs(img_in, transformed_imgs, scale_factor, scale_times, rotate_angle, rotate_times);
+
         start_time = clock();
-        imgTest(model, img_in);
+        imgTest(model_loaded,img_in);
         end_time = clock();
         std::cout << "Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
 
         cv::imshow("img_in", img_in);
         cv::waitKey();
+
+//        for(int i=0; i<transformed_imgs.size();i++){
+//            for(int j=0; j<transformed_imgs[0].size(); j++){
+//                start_time = clock();
+//                imgTest(model_loaded, transformed_imgs[i][j]);
+//                end_time = clock();
+//                std::cout << "Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
+//
+//                cv::imshow("img_in", transformed_imgs[i][j]);
+//                cv::waitKey();
+//            }
+//        }
     }
 
     std::cout << "Bye" << std::endl;
+
+
     return 0;
 }

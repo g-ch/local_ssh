@@ -10,10 +10,55 @@
 #include "Eigen/Eigen"
 #include <opencv2/core/eigen.hpp>
 #include <cstdlib>
+#include "labelimg_xml_reader.h"
+#include <dirent.h>
+#include <iostream>
 
 typedef std::vector<std::vector<Eigen::VectorXf>> MAP_XD;
 
-void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
+void turnBlacktoGray(cv::Mat &src){
+    int nr=src.rows;
+    int nc=src.cols;
+
+    for(int i=0; i<nr ;i++){
+        auto* in_src = src.ptr<uchar>(i); // float
+        for(int j=0; j<nc; j++){
+            if(in_src[j] < 127){
+                in_src[j] = 127;
+            }
+        }
+    }
+}
+
+void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
+{
+    /// The required_type should be like ".jpg" or ".xml".
+    DIR *pDir;
+    struct dirent* ptr;
+    if(!(pDir = opendir(path.c_str()))){
+        std::cout<<"Folder doesn't Exist!"<<std::endl;
+        return;
+    }
+
+    while((ptr = readdir(pDir)) != 0){
+        std::string file_name_temp = ptr->d_name;
+        if(required_type==".all"){
+            filenames.push_back(file_name_temp);
+        }else{
+            std::string::size_type position;
+            position = file_name_temp.find(required_type);
+            if(position != file_name_temp.npos){
+                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
+//                std::cout << file_name_temp2 << std::endl;
+                filenames.push_back(file_name_temp2);
+            }
+        }
+
+    }
+    closedir(pDir);
+}
+
+void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle, int extra_pixel_value = 127)
 {
     float radian = (float) (angle /180.0 * CV_PI);
 
@@ -21,7 +66,7 @@ void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
     int maxBorder =(int) (std::max(src.cols, src.rows)* 1.414 ); //即为sqrt(2)*max
     int dx = (maxBorder - src.cols)/2;
     int dy = (maxBorder - src.rows)/2;
-    cv::copyMakeBorder(src, dst, dy, dy, dx, dx, cv::BORDER_CONSTANT, cv::Scalar(127));
+    cv::copyMakeBorder(src, dst, dy, dy, dx, dx, cv::BORDER_CONSTANT, cv::Scalar(extra_pixel_value));
 
     //旋转
     cv::Point2f center( (float)(dst.cols/2) , (float) (dst.rows/2));
@@ -60,7 +105,7 @@ void pepperAndSaltNoise(cv::Mat &src, cv::Mat &dist) {
 //    cv::waitKey();
 }
 
-void getScaledAndRotatedImgs(cv::Mat src, std::vector<std::vector<cv::Mat>> &result, float scale_factor, int scale_times, float rotate_angle, int rotate_times)
+void getScaledAndRotatedImgs(cv::Mat &src, std::vector<std::vector<cv::Mat>> &result, float scale_factor, int scale_times, float rotate_angle, int rotate_times)
 {
     /// Note: rotate_times=12 and rotate_angle=30 would cover 360 degree
     /// The original image scale and rotate angle will be included
@@ -276,8 +321,16 @@ void getCostMaps(std::vector<std::vector<cv::Mat>> &transformed_images, float sc
         print_feature_dimension = false;
     }
 
-    std::cout << "cost map finished" << std::endl;
+//    std::cout << "cost map finished" << std::endl;
 }
 
+
+void showImages(std::vector<cv::Mat> &images, int wait_time_ms)
+{
+    for(auto &img : images){
+        cv::imshow("images", img);
+        cv::waitKey(wait_time_ms);
+    }
+}
 
 #endif //LOCAL_SSH_PREPROCESS_H
