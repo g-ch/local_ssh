@@ -65,9 +65,10 @@ void convert_images(std::vector<cv::Mat> &rects, std::vector<vec_t>& data)
     }
 }
 
-void convert_labels(std::vector<size_t> &labels_ori, std::vector<label_t> &labels){
+void convert_labels(std::vector<float> &labels_ori, std::vector<vec_t> &labels){
     for(const auto &label_ori : labels_ori){
-        labels.push_back((label_t)label_ori);
+        tiny_dnn::vec_t v = {label_ori};
+        labels.push_back(v);
     }
 //    std::cout << labels[0] << std::endl;
 //    std::cout << labels[1000] << std::endl;
@@ -98,66 +99,30 @@ static void construct_net(network<sequential>& nn) {
 #undef O
 #undef X
 
-    core::backend_t backend_type = core::default_engine();
     nn << conv(RECT_SIZE_X, RECT_SIZE_Y, 7, 1, 6,   // C1, 1@26x26-in, 6@20x20-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
+               padding::valid, true, 1, 1, 1, 1)
        << relu(20,20,6)
        << max_pool(20, 20, 6, 2)   // S2, 6@20x20-in, 6@10x10-out
        << relu(10,10,6)
        << conv(10, 10, 3, 6, 16,
                connection_table(tbl, 6, 16),// C3, 6@10x10-in, 16@8x8-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
+               padding::valid, true, 1, 1, 1, 1)
        << relu(8,8,16)
        << max_pool(8, 8, 16, 2)   // S4, 16@8x8-in, 16@4x4-out
        << relu(4,4,16)
        << conv(4, 4, 3, 16, 64,   // C4, 16@4x4-in, 64@2x2-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
+               padding::valid, true, 1, 1, 1, 1)
        << relu(2,2,64)
        << conv(2, 2, 2, 64, 128,   // C5, 64@2x2-in, 128@1x1-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
+               padding::valid, true, 1, 1, 1, 1)
        << relu(1,1,128)
-       << fc(128, 2, true, backend_type)  // F6, 128-in, 2-out
-       << tanh(2);
+       << fc(128, 1, true);  // F6, 128-in, 1-out
+//       << relu(1);
 }
 
 
-static void construct_deep_net(network<sequential>& nn) {
-    using fc = tiny_dnn::layers::fc;
-    using conv = tiny_dnn::layers::conv;
-    using ave_pool = tiny_dnn::layers::ave_pool;
-    using max_pool = tiny_dnn::layers::max_pool;
-    using tanh = tiny_dnn::activation::tanh;
-    using relu = tiny_dnn::activation::relu;
 
-    using tiny_dnn::core::connection_table;
-    using padding = tiny_dnn::padding;
-
-    core::backend_t backend_type = core::default_engine();
-    nn << conv(RECT_SIZE_X, RECT_SIZE_Y, 3, 1, 32,   // C1, 1@26x26-in, 16@24x24-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
-       << relu()
-       << max_pool(24, 24, 32, 2)   // S2, 16@24x24-in, 16@12x12-out
-       << relu()
-       << conv(12, 12, 3, 32, 64,  // C3, 16@12x12-in, 32@10x10-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
-       << relu()
-       << max_pool(10, 10, 64, 2)   // S4, 32@10x10-in, 32@5x5-out
-       << relu()
-       << conv(5, 5, 3, 64, 128,   // C5, 32@5x5-in, 64@3x3-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
-       << relu()
-       << conv(3, 3, 3, 128, 256,   // C6, 64@3x3-in, 128@1x1-out
-               padding::valid, true, 1, 1, 1, 1, backend_type)
-       << relu()
-       << fc(128, 32, true, backend_type)  // F6, 128-in, 32-out
-       << relu()
-       << fc(32, 2, true, backend_type)  // F6, 128-in, 32-out
-       << relu();
-
-}
-
-
-void shuffle(std::vector<vec_t>& images, std::vector<label_t>& labels)
+void shuffle(std::vector<vec_t>& images, std::vector<vec_t>& labels)
 {
     unsigned seed;  // Random generator seed for collecting extra negative samples
     seed = time(0);
@@ -174,8 +139,8 @@ void shuffle(std::vector<vec_t>& images, std::vector<label_t>& labels)
 
 
 static void train_lenet(tiny_dnn::network<tiny_dnn::sequential> &nn,
-                        std::vector<vec_t> &trainging_data, std::vector<label_t> &trainging_labels,
-                        std::vector<vec_t> &testing_data, std::vector<label_t> &testing_labels,
+                        std::vector<vec_t> &trainging_data, std::vector<vec_t> &trainging_labels,
+                        std::vector<vec_t> &testing_data, std::vector<vec_t> &testing_labels,
                         double learning_rate,  int n_train_epochs,  int n_minibatch)
 {
     shuffle(trainging_data, trainging_labels);
@@ -201,8 +166,8 @@ static void train_lenet(tiny_dnn::network<tiny_dnn::sequential> &nn,
         std::cout <<std::endl << "Epoch " << epoch << "/" << n_train_epochs << " finished. "
                   << t.elapsed() << "s elapsed." << std::endl;
         ++epoch;
-        tiny_dnn::result res = nn.test(testing_data, testing_labels);
-        std::cout << res.num_success << "/" << res.num_total << std::endl;
+        float loss = nn.get_loss<tiny_dnn::mse>(trainging_data, trainging_labels);
+        std::cout << loss << "/" << std::endl;
 
         shuffle(trainging_data, trainging_labels);
 
@@ -213,16 +178,12 @@ static void train_lenet(tiny_dnn::network<tiny_dnn::sequential> &nn,
     auto on_enumerate_minibatch = [&]() { disp += n_minibatch; };
 
     // training
-    nn.train<tiny_dnn::mse>(optimizer, trainging_data, trainging_labels, n_minibatch,
-                            n_train_epochs, on_enumerate_minibatch,
-                            on_enumerate_epoch);
-
+    nn.fit<tiny_dnn::mse>(optimizer, trainging_data, trainging_labels, n_minibatch,
+                            n_train_epochs, []() {},  on_enumerate_epoch);
     std::cout << "end training." << std::endl;
 
-    // test and show results
-    nn.test(testing_data, testing_labels).print_detail(std::cout);
     // save network model & trained weights
-    nn.save("LeNet-model-rects");
+    nn.save("LeNet-model-rects-regression");
 }
 
 void mergeAndConvertImages(std::vector<cv::Mat> positive_images, std::vector<cv::Mat> negative_images, std::vector<vec_t> &results)
@@ -231,7 +192,7 @@ void mergeAndConvertImages(std::vector<cv::Mat> positive_images, std::vector<cv:
     convert_images(positive_images, results);
 }
 
-void mergeAndConvertLabels(std::vector<size_t> postive_labels, std::vector<size_t> negative_labels, std::vector<label_t> &results)
+void mergeAndConvertLabels(std::vector<float> postive_labels, std::vector<float> negative_labels, std::vector<vec_t> &results)
 {
     postive_labels.insert(postive_labels.end(), negative_labels.begin(), negative_labels.end());
     convert_labels(postive_labels, results);
@@ -239,7 +200,7 @@ void mergeAndConvertLabels(std::vector<size_t> postive_labels, std::vector<size_
 
 int main(){
 //
-    bool if_training = false;
+    bool if_training = true;
     if(if_training){
         /// Read images
         std::string positive_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Rect/Positive_ori_2/";
@@ -267,7 +228,7 @@ int main(){
         std::shuffle(negative_sample_rects.begin(), negative_sample_rects.end(), std::mt19937(std::random_device()()));
 
         /// Convert to required data form
-        float validation_ratio = 0.05;
+        float validation_ratio = 0.0;
         int positive_data_training_num = positive_sample_rects.size() * (1.f-validation_ratio);
         int negative_data_training_num = negative_sample_rects.size() * (1.f-validation_ratio);
         int positive_data_validation_num = positive_sample_rects.size() - positive_data_training_num;
@@ -284,13 +245,13 @@ int main(){
         std::vector<cv::Mat> positive_validation_data = vectorRangeCopy(positive_sample_rects, positive_data_training_num, positive_data_validation_num);
         std::vector<cv::Mat> negative_validation_data = vectorRangeCopy(negative_sample_rects, negative_data_training_num, negative_data_validation_num);
 
-        std::vector<size_t> positive_training_data_labels(positive_data_training_num, 0);
-        std::vector<size_t> negative_training_data_labels(negative_data_training_num, 1);
-        std::vector<size_t> positive_validation_data_labels(positive_data_validation_num, 0);
-        std::vector<size_t> negative_validation_data_labels(negative_data_validation_num, 1);
+        std::vector<float> positive_training_data_labels(positive_data_training_num, 0);
+        std::vector<float> negative_training_data_labels(negative_data_training_num, 1);
+        std::vector<float> positive_validation_data_labels(positive_data_validation_num, 0);
+        std::vector<float> negative_validation_data_labels(negative_data_validation_num, 1);
 
         std::vector<vec_t> training_data_desired_form, validation_data_desired_form;
-        std::vector<label_t> training_labels_desired_form, validation_labels_desired_form;
+        std::vector<vec_t> training_labels_desired_form, validation_labels_desired_form;
 
         mergeAndConvertImages(positive_training_data, negative_training_data, training_data_desired_form);
         mergeAndConvertImages(positive_validation_data, negative_validation_data, validation_data_desired_form);
@@ -303,7 +264,7 @@ int main(){
 
         /// Training
         tiny_dnn::network<tiny_dnn::sequential> nn;
-        train_lenet(nn, training_data_desired_form, training_labels_desired_form, validation_data_desired_form, validation_labels_desired_form, 1.0, 100, 32);
+        train_lenet(nn, training_data_desired_form, training_labels_desired_form, validation_data_desired_form, validation_labels_desired_form, 1.0, 500, 32);
 
     }
 
@@ -311,7 +272,8 @@ int main(){
 
     /// Load model and testing
     tiny_dnn::network<tiny_dnn::sequential> model;
-    model.load("LeNet-model-rects");
+    model.load("LeNet-model-rects-regression");
+//    model.load("LeNet-model-rects-good-good");
     std::cout << "Model loaded!" << std::endl;
 
     /// Testing on images and show
@@ -328,7 +290,7 @@ int main(){
         cv::Mat image_this_copy = image_this.clone();
 
         start_time = clock();
-        
+
         /// Extract skeleton points
         std::vector<cv::Point> skeleton_points;
         findVoronoiSkeletonPoints(image_this, skeleton_points, true);  /// CHG
@@ -346,9 +308,10 @@ int main(){
                 cv::Mat rect_this = image_this(cv::Rect(sk_point.x-RECT_SIZE_X/2, sk_point.y-RECT_SIZE_Y/2, RECT_SIZE_X, RECT_SIZE_Y));
                 vec_t data_this;
                 convert_image(rect_this, data_this);
-                label_t label_this =  model.predict_label(data_this);
+                vec_t label_this = model.predict(data_this);
+                std::cout << "label_this = " << label_this[0] << std::endl;
 
-                if(label_this < 0.5){
+                if(label_this[0] < 0.5){
                     cv::circle(image_this_copy, cv::Point(sk_point.x, sk_point.y), 1, cv::Scalar(0), 1);
                     gateway_num ++;
                 }

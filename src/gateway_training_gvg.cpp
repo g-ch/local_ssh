@@ -27,7 +27,7 @@ const float rotate_angle = 30;  // 30x12
 const int rotate_times = 12; //1, when use rotated kernel
 
 bool use_noised_data = false;
-bool use_rotated_data = false;
+bool use_rotated_data = true;
 
 bool save_rect_images = true;
 const int rect_to_save_size_x = 26;
