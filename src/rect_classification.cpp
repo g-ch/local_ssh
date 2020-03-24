@@ -2,10 +2,6 @@
 // Created by cc on 2020/3/21.
 //
 
-//
-// Created by cc on 2020/3/18.
-//
-
 #include "tiny_dnn/tiny_dnn.h"
 #include "preprocess.h"
 #include <iostream>
@@ -198,9 +194,55 @@ void mergeAndConvertLabels(std::vector<float> postive_labels, std::vector<float>
     convert_labels(postive_labels, results);
 }
 
+float pointSquareDistance(cv::Point p1, cv::Point p2)
+{
+    return (p1.x - p2.x)*(p1.x - p2.x) + (p1.y - p2.y)*(p1.y - p2.y);
+}
+
+void rankFromLargeToSmallConfidence(std::vector<cv::Point> &p_in, std::vector<float> &confidence)
+{
+    for(int i=0;  i<p_in.size()-1; i++){
+        for(int j=i+1; j<p_in.size(); j++){
+            if(confidence[i] < confidence[j]){
+                float temp_confidence = confidence[i];
+                cv::Point temp_point = p_in[i];
+                confidence[i] = confidence[j];
+                p_in[i] = p_in[j];
+                confidence[j] = temp_confidence;
+                p_in[j] = temp_point;
+            }
+        }
+    }
+}
+
+void nonMaximumSuppression(std::vector<cv::Point> &points_in, std::vector<float> &confidences, std::vector<cv::Point> &p_out, float dist_threshold = 4)
+{
+    float square_threshold = dist_threshold * dist_threshold;
+    rankFromLargeToSmallConfidence(points_in, confidences);
+    std::vector<int> merged_flag(points_in.size(), 0);
+    for(int i=0; i<points_in.size()-1; i++){
+        if(!merged_flag[i]){
+            for(int j=i+1; j<points_in.size(); j++){
+                if(!merged_flag[j]){
+                    float square_dist = pointSquareDistance(points_in[i], points_in[j]);
+                    if(square_dist <= square_threshold){
+                        if(confidences[i]==confidences[j]){
+                            points_in[i] = (points_in[i] + points_in[j]) / 2;
+                        }
+                        merged_flag[j] = 1;
+                    }
+                }
+            }
+            merged_flag[i] = 1;
+            p_out.push_back(points_in[i]);
+        }
+    }
+}
+
+
 int main(){
 //
-    bool if_training = true;
+    bool if_training = false;
     if(if_training){
         /// Read images
         std::string positive_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Rect/Positive_ori_2/";
@@ -299,8 +341,9 @@ int main(){
             continue;
         }
 
-        int gateway_num = 0;
-
+        /// Predict on skeleton points
+        std::vector<float> confidences_vec;
+        std::vector<cv::Point> valid_points, result_points;
         for(auto &sk_point : skeleton_points){
             if(sk_point.x < RECT_SIZE_X/2 || sk_point.y <RECT_SIZE_Y/2 || sk_point.x > image_this.cols-RECT_SIZE_X/2 || sk_point.y > image_this.rows-RECT_SIZE_Y/2){
                 continue;
@@ -309,17 +352,22 @@ int main(){
                 vec_t data_this;
                 convert_image(rect_this, data_this);
                 vec_t label_this = model.predict(data_this);
-                std::cout << "label_this = " << label_this[0] << std::endl;
-
+                
                 if(label_this[0] < 0.5){
-                    cv::circle(image_this_copy, cv::Point(sk_point.x, sk_point.y), 1, cv::Scalar(0), 1);
-                    gateway_num ++;
+                    float confidence = 1.f - label_this[0];
+                    confidences_vec.push_back(confidence);
+                    valid_points.push_back(sk_point);
                 }
             }
         }
+        /// nonMaximumSuppression
+        nonMaximumSuppression(valid_points, confidences_vec, result_points, 4);
+        for(const auto p : result_points){
+            cv::circle(image_this_copy, cv::Point(p.x, p.y), 1, cv::Scalar(0), 1);
+        }
 
         end_time = clock();
-        std::cout <<"gateway_num = " << gateway_num <<" in image "<< image_name << std::endl;
+        std::cout <<"gateway_num = " << result_points.size() <<" in image "<< image_name << std::endl;
         std::cout << "Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
 
         cv::imshow("image_this_copy", image_this_copy);
