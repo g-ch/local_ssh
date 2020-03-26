@@ -2,4 +2,5 @@
 /cmake-build-debug/
 /include/Eigen/
 /.idea/
-
+/script/venv/
+/script/.idea/

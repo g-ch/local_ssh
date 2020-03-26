@@ -17,13 +17,13 @@
 
 #define MAP_POW 7
 #define RESOLUTION 0.1
-#define Z_MIN 0.2
-#define Z_MAX 0.8
+#define Z_MIN 0.4
+#define Z_MAX 1.8
 
 using namespace std;
 using namespace message_filters;
 
-string path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/";
+string path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/route2/";
 
 void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_msgs::PointStampedConstPtr& center)
 {

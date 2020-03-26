@@ -27,7 +27,7 @@ const float rotate_angle = 30;  // 30x12
 const int rotate_times = 12; //1, when use rotated kernel
 
 bool use_noised_data = false;
-bool use_rotated_data = true;
+bool use_rotated_data = false;
 
 bool save_rect_images = true;
 const int rect_to_save_size_x = 26;
@@ -755,10 +755,11 @@ int main(int argc, char** argv)
         rect_save_counter = 0; //reset counter to avoid save the same images
 
         /// Generating training data
-        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
-
+        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/data/";
 
         generateTrainingData(training_data_path, maximum_extra_sample);
+
+        return 0;
 
         /// Read training data
         cv::Mat data;

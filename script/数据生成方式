@@ -1,0 +1,10 @@
+1. 运行 save_pcd_jpgs文件将地图点云数据z方向投影保存为图片，128x128变成64x64像素。
+
+2. 可选运行enhance.py进行数据扩张。
+
+3. 标注数据，采用Labelimg标注，将gateway放在长方形框的中心即可，如果没有gateway可以在随意地方标注随意标签以生成xml文件，可供rect生成程序采集负面样本
+
+4. 运行gateway_training_gvg程序，令save_rect_images为true以保存rect。Rect（ROI）提取方式为先找到GVG点，如果xml中有gateway标签，则找就近的GVG点(一定距离内)为修正的Gateway，将修正的Gateway周围26x26区域作为Rect。
+
+
+5. 运行rect_classification程序训练

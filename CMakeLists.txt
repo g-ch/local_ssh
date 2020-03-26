@@ -52,3 +52,7 @@ target_link_libraries(rect_classification  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAK
 add_executable(test_svm src/test_svm.cpp)
 target_link_libraries(test_svm  ${OpenCV_LIBS} ${tinyxml2_LIB})
 
+add_executable(label_directions src/label_directions.cpp)
+target_link_libraries(label_directions  ${OpenCV_LIBS} ${tinyxml2_LIB})
+
+
