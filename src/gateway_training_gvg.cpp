@@ -30,8 +30,8 @@ bool use_noised_data = false;
 bool use_rotated_data = false;
 
 bool save_rect_images = true;
-const int rect_to_save_size_x = 26;
-const int rect_to_save_size_y = 26;
+const int rect_to_save_size_x = 30; //26
+const int rect_to_save_size_y = 30;  //26
 int rect_save_counter = 0;
 int negative_data_save_dist_threshold = 3;
 
@@ -295,7 +295,7 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
                 cv::Point gateway_img_pos((object.x_min + object.x_max)/2, (object.y_min + object.y_max)/2);
                 cv::Point nearest_skeleton;
                 float nearest_dist = findNearestPoint(gateway_img_pos, skeleton_points, nearest_skeleton);
-                if(nearest_dist > 3){
+                if(nearest_dist > 2.5){
                     std::cout << "GVG point miss match hand labeled point, skip..." << std::endl;
                     break;
                 }
@@ -456,7 +456,7 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
                         cv::Point gateway_img_pos(gateway_rotated_image_position.x, gateway_rotated_image_position.y);
                         cv::Point nearest_skeleton;
                         float nearest_dist = findNearestPoint(gateway_img_pos, skeleton_points, nearest_skeleton);
-                        if(nearest_dist > 3){
+                        if(nearest_dist > 2.5){
                             std::cout << "GVG point miss match hand labeled point, skip..." << std::endl;
                             break;
                         }
@@ -755,7 +755,7 @@ int main(int argc, char** argv)
         rect_save_counter = 0; //reset counter to avoid save the same images
 
         /// Generating training data
-        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/data/";
+        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/30x30/";
 
         generateTrainingData(training_data_path, maximum_extra_sample);
 

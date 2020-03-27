@@ -55,4 +55,11 @@ target_link_libraries(test_svm  ${OpenCV_LIBS} ${tinyxml2_LIB})
 add_executable(label_directions src/label_directions.cpp)
 target_link_libraries(label_directions  ${OpenCV_LIBS} ${tinyxml2_LIB})
 
+add_executable(rename_imgs src/rename_imgs.cpp)
+target_link_libraries(rename_imgs  ${OpenCV_LIBS} ${tinyxml2_LIB})
 
+add_executable(rect_classify_predict_angle src/rect_classify_predict_angle.cpp)
+target_link_libraries(rect_classify_predict_angle  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(real_time_prediction src/real_time_prediction.cpp)
+target_link_libraries(real_time_prediction  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
