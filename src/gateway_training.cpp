@@ -19,39 +19,12 @@
 #define KERNEL_X 13
 #define KERNEL_Y 21
 
-const float scale_factor = 0.85;
+const float scale_factor = 0.9;
 const int scale_times = 3;
 const float rotate_angle = 45;
 const int rotate_times = 8;
 
 
-void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
-{
-    /// The required_type should be like ".jpg" or ".xml".
-    DIR *pDir;
-    struct dirent* ptr;
-    if(!(pDir = opendir(path.c_str()))){
-        std::cout<<"Folder doesn't Exist!"<<std::endl;
-        return;
-    }
-
-    while((ptr = readdir(pDir)) != 0){
-        std::string file_name_temp = ptr->d_name;
-        if(required_type==".all"){
-            filenames.push_back(file_name_temp);
-        }else{
-            std::string::size_type position;
-            position = file_name_temp.find(required_type);
-            if(position != file_name_temp.npos){
-                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
-//                std::cout << file_name_temp2 << std::endl;
-                filenames.push_back(file_name_temp2);
-            }
-        }
-
-    }
-    closedir(pDir);
-}
 
 bool ifCloseToAnyPointInVector(Eigen::Vector2i p, const std::vector<Eigen::Vector2i>& v, const float threshold){
     for(const auto &point : v){
@@ -69,7 +42,7 @@ float pointSquareDistance(cv::Point p1, cv::Point p2){
 }
 
 
-cv::Point findNearestPoint(cv::Point &p, std::vector<cv::Point> &reference_points){
+float findNearestPoint(cv::Point &p, std::vector<cv::Point> &reference_points, cv::Point &nearest_point){
     const int reference_points_size = reference_points.size();
     float min_distance = 100000000.f;
     int min_seq = 0;
@@ -81,7 +54,9 @@ cv::Point findNearestPoint(cv::Point &p, std::vector<cv::Point> &reference_point
         }
     }
 
-    return reference_points[min_seq];
+    nearest_point = reference_points[min_seq];
+
+    return sqrt(min_distance);
 }
 
 
@@ -218,7 +193,12 @@ void generateTrainingData(std::string data_dir)
             if(object.label == "gateway"){
                 /// Use nearest skeleton point to correct hand label error
                 cv::Point gateway_img_pos((object.x_min + object.x_max)/2, (object.y_min + object.y_max)/2);
-                cv::Point nearest_skeleton = findNearestPoint(gateway_img_pos, skeleton_points);
+                cv::Point nearest_skeleton;
+                float nearest_dist = findNearestPoint(gateway_img_pos, skeleton_points, nearest_skeleton);
+                if(nearest_dist > 3){
+                    std::cout << "GVG point miss match hand labeled point, skip..." << std::endl;
+                    break;
+                }
 
                 const int gateway_x = nearest_skeleton.y; ///Note the x in a image is y in a matrix
                 const int gateway_y = nearest_skeleton.x;
@@ -504,7 +484,7 @@ int main(int argc, char** argv)
     validateSVM(model, data, labels);
 
     /// Testing with images
-    std::string test_images_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
+    std::string test_images_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2_test/";
     std::vector<std::string> test_image_names;
     getFileNames(test_images_path, test_image_names, ".png");
     clock_t start_time, end_time;

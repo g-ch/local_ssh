@@ -79,13 +79,13 @@ void voronoiGenerate(cv::Mat &img, std::vector<cv::Point2f> &obstacle_points)
     drawVoronoi(img, subdiv);
 }
 
-void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_points){
+void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_points, bool show_result = false){
     /// 1. Intensity filter
     cv::Mat map_eroded;
     map_eroded = map > 200;
 
     /// 2. Erode and dilate
-    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));
+    cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));
     cv::erode(map, map_eroded, element); //Opening operation
     cv::dilate(map_eroded, map_eroded, element);
 
@@ -94,7 +94,7 @@ void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_poi
     map_eroded = map_eroded == 100;
 
     /// 4. Remove small black pieces inside. Might be obstacles like pedestrians
-    cv::Mat element2 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));
+    cv::Mat element2 = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3,3));
     cv::dilate(map_eroded, map_eroded, element); /// Closing operation
     cv::erode(map_eroded, map_eroded, element);
 
@@ -111,13 +111,15 @@ void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_poi
     }
 
     /// 6. Visualization
-//    cv::Mat image;
-//    map.copyTo(image);
-//    for(const auto &point : skeleton_points){
-//        cv::circle(image, point, 1, cv::Scalar(0), 1);
-//    }
-//    cv::imshow("voronoi image", image);
-//    cv::waitKey();
+    if(show_result){
+        cv::Mat image;
+        map.copyTo(image);
+        for(const auto &point : skeleton_points){
+            cv::circle(image, point, 1, cv::Scalar(0), 1);
+        }
+        cv::imshow("voronoi image", image);
+//        cv::waitKey();
+    }
 
 }
 

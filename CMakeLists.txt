@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(local_ssh)
 
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-add_definitions(-std=c++11 -g -O1 -ftree-vectorize -march=native)
+add_definitions(-std=c++14 -g -O1 -ftree-vectorize -march=native)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(Threads)
 
 catkin_package()
 
@@ -41,4 +42,7 @@ target_link_libraries(gateway_training ${catkin_LIBRARIES} ${OpenCV_LIBS} ${tiny
 
 add_executable(test_svm src/test_svm.cpp)
 target_link_libraries(test_svm  ${OpenCV_LIBS} ${tinyxml2_LIB})
+
+add_executable(rect_classify_predict_angle src/rect_classify_predict_angle.cpp)
+target_link_libraries(rect_classify_predict_angle  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
 

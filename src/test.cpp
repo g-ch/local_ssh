@@ -15,35 +15,6 @@
 #define KERNEL_X 13
 #define KERNEL_Y 21
 
-void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
-{
-    /// The required_type should be like ".jpg" or ".xml".
-    DIR *pDir;
-    struct dirent* ptr;
-    if(!(pDir = opendir(path.c_str()))){
-        std::cout<<"Folder doesn't Exist!"<<std::endl;
-        return;
-    }
-
-    while((ptr = readdir(pDir)) != 0){
-        std::string file_name_temp = ptr->d_name;
-        if(required_type==".all"){
-            filenames.push_back(file_name_temp);
-        }else{
-            std::string::size_type position;
-            position = file_name_temp.find(required_type);
-            if(position != file_name_temp.npos){
-                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
-                std::cout << file_name_temp2 << std::endl;
-                filenames.push_back(file_name_temp2);
-            }
-        }
-
-    }
-    closedir(pDir);
-}
-
-
 
 void defineKernels(std::vector<Eigen::MatrixXf> &kernels)
 {

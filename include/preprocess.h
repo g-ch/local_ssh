@@ -9,6 +9,8 @@
 #include <vector>
 #include "Eigen/Eigen"
 #include <opencv2/core/eigen.hpp>
+#include <dirent.h>
+
 
 typedef std::vector<std::vector<Eigen::Vector3f>> MAP_3D;
 
@@ -41,8 +43,35 @@ void turnGraytoBlack(cv::Mat &src){
     }
 }
 
+void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
+{
+    /// The required_type should be like ".jpg" or ".xml".
+    DIR *pDir;
+    struct dirent* ptr;
+    if(!(pDir = opendir(path.c_str()))){
+        std::cout<<"Folder doesn't Exist!"<<std::endl;
+        return;
+    }
 
-void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
+    while((ptr = readdir(pDir)) != 0){
+        std::string file_name_temp = ptr->d_name;
+        if(required_type==".all"){
+            filenames.push_back(file_name_temp);
+        }else{
+            std::string::size_type position;
+            position = file_name_temp.find(required_type);
+            if(position != file_name_temp.npos){
+                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
+//                std::cout << file_name_temp2 << std::endl;
+                filenames.push_back(file_name_temp2);
+            }
+        }
+
+    }
+    closedir(pDir);
+}
+
+void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle, cv::Scalar edge_color = cv::Scalar(127))
 {
     float radian = (float) (angle /180.0 * CV_PI);
 
@@ -50,12 +79,12 @@ void imgRotateCutEdge(cv::Mat &src,cv::Mat &dst,float angle)
     int maxBorder =(int) (std::max(src.cols, src.rows)* 1.414 ); //即为sqrt(2)*max
     int dx = (maxBorder - src.cols)/2;
     int dy = (maxBorder - src.rows)/2;
-    cv::copyMakeBorder(src, dst, dy, dy, dx, dx, cv::BORDER_CONSTANT, cv::Scalar(127));
+    cv::copyMakeBorder(src, dst, dy, dy, dx, dx, cv::BORDER_CONSTANT, edge_color);
 
     //旋转
     cv::Point2f center( (float)(dst.cols/2) , (float) (dst.rows/2));
     cv::Mat affine_matrix = getRotationMatrix2D( center, angle, 1.0 );//求得旋转矩阵
-    cv::warpAffine(dst, dst, affine_matrix, dst.size());
+    cv::warpAffine(dst, dst, affine_matrix, dst.size(), cv::INTER_NEAREST);
 
     //剪掉多余边框
     int x = (dst.cols - src.cols) / 2;
