@@ -22,6 +22,7 @@
 #include <algorithm>
 #include "voronoi_skeleton_points.h"
 #include "preprocess.h"
+#include "local_feature_map.h"
 
 #define MAP_POW 7
 #define RESOLUTION 0.1
@@ -37,6 +38,8 @@ using namespace tiny_dnn;
 
 
 tiny_dnn::network<tiny_dnn::sequential> model, angle_model;
+
+std::vector<LocalFeatureMap> local_maps_on_nodes;
 
 void convert_image(const cv::Mat &img, vec_t &d)
 {
@@ -212,7 +215,7 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
         }
     }
 
-    /// Correct directions for angle output in range[0, Pi]
+    /// Correct directions for angle output
     for(int i=0; i<result_points.size(); i++){
         auto p = result_points[i];
         float dy1 = p.x - image_this_copy.cols/2;
@@ -246,14 +249,17 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
         cv::circle(image_this_copy, p, 2, cv::Scalar(0), 1);
         cv::Point direction_end_point;
 
-        float direction_angle = result_angles[i];
-        direction_end_point.x = 10 * cos(direction_angle) + p.x;
-        direction_end_point.y = 10 * sin(direction_angle) + p.y;
+        float direction_angle_rad = result_angles[i];
+        direction_end_point.x = 10 * cos(direction_angle_rad) + p.x;
+        direction_end_point.y = 10 * sin(direction_angle_rad) + p.y;
         cv::line(image_this_copy, p, direction_end_point, cv::Scalar(160), 1);
     }
 
     cv::imshow("image_this_copy", image_this_copy);
     cv::waitKey(5);
+
+    /// TODO: turned to real position and add to local feature map
+    
 }
 
 
