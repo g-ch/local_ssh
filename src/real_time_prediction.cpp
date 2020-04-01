@@ -23,6 +23,8 @@
 #include "voronoi_skeleton_points.h"
 #include "preprocess.h"
 #include "local_feature_map.h"
+#include "local_ssh/Feature.h"
+#include "local_ssh/Features.h"
 
 #define MAP_POW 7
 #define RESOLUTION 0.1
@@ -39,9 +41,10 @@ using namespace tiny_dnn;
 
 
 tiny_dnn::network<tiny_dnn::sequential> model, angle_model;
-
 std::vector<LocalFeatureMap> local_maps_on_nodes;
 int node_counter = 0;
+
+ros::Publisher node_features_pub;
 
 void convert_image(const cv::Mat &img, vec_t &d)
 {
@@ -359,9 +362,6 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
         }
     }
 
-//    end_time = clock();
-//    std::cout << "Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
-
     cv::Mat img_to_flood_fill, img_to_show_all;
     image_this_copy.copyTo(img_to_flood_fill);
     image_this_copy.copyTo(img_to_show_all);
@@ -428,6 +428,27 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
     if(if_passed_a_gateway){
         //remove the nodes that should belong to the new node
         local_maps_on_nodes[node_counter].deleteFromFeatureMap(features_in);
+        //publish
+        local_ssh::Features feature_map_to_publish;
+        feature_map_to_publish.header.stamp = ros::Time::now();
+        for(const auto& valid_feature : local_maps_on_nodes[node_counter].feature_map){
+            if(valid_feature.exsitence_confidence >= local_maps_on_nodes[node_counter].Confidence_High){
+                local_ssh::Feature temp_feature;
+                temp_feature.label = valid_feature.label;
+                temp_feature.x = valid_feature.pose.x;
+                temp_feature.y = valid_feature.pose.y;
+                temp_feature.yaw = valid_feature.pose.yaw;
+                temp_feature.confidence = valid_feature.exsitence_confidence;
+                feature_map_to_publish.features.push_back(temp_feature);
+            }
+        }
+        feature_map_to_publish.passed_gateway.label = local_maps_on_nodes[node_counter].gateway_just_passed.label;
+        feature_map_to_publish.passed_gateway.x = local_maps_on_nodes[node_counter].gateway_just_passed.pose.x;
+        feature_map_to_publish.passed_gateway.y = local_maps_on_nodes[node_counter].gateway_just_passed.pose.y;
+        feature_map_to_publish.passed_gateway.yaw = local_maps_on_nodes[node_counter].gateway_just_passed.pose.yaw;
+        feature_map_to_publish.passed_gateway.confidence = local_maps_on_nodes[node_counter].gateway_just_passed.exsitence_confidence;
+        node_features_pub.publish(feature_map_to_publish);
+
         // Start another node
         LocalFeatureMap *node = new LocalFeatureMap;
         local_maps_on_nodes.push_back(*node);
@@ -437,6 +458,10 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
     /// Add currently detected features to local feature map
     local_maps_on_nodes[node_counter].addToFeatureMap(features_in);
 
+    end_time = clock();
+    std::cout << "Time = " << (double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
+
+    /// Display map
     showAllStoredFeatures(local_maps_on_nodes[node_counter].feature_map, center->point.x, center->point.y, img_to_show_all, "current map");
     if(local_maps_on_nodes.size()>1){
         showAllStoredFeatures(local_maps_on_nodes[node_counter-1].feature_map, center->point.x, center->point.y, img_to_show_all, "last map");
@@ -461,6 +486,8 @@ int main(int argc, char** argv)
 
     message_filters::Synchronizer<sync_policy_classification> sync(sync_policy_classification(10), map_sub, center_sub);
     sync.registerCallback(boost::bind(&mapCallback, _1, _2));
+
+    node_features_pub = nh.advertise<local_ssh::Features>("/features_in_last_map", 1);
 
     ros::spin();
 

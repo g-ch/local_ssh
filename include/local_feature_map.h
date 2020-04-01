@@ -48,7 +48,6 @@ public:
     Feature gateway_just_passed;
 
 
-
     /** Coefficients **/
     float Path_Record_Distance_Interval;
     float Pass_Gateway_Check_Distance;
@@ -120,7 +119,7 @@ public:
                     temp_feature.exsitence_confidence = Confidence_Init;
                     temp_feature.in_fov_flag = true;
                     feature_map.push_back(temp_feature);
-                    std::cout << "Add new feature (" << temp_feature.pose.x <<", " <<temp_feature.pose.y<<")"<<std::endl;
+//                    std::cout << "Add new feature (" << temp_feature.pose.x <<", " <<temp_feature.pose.y<<")"<<std::endl;
                 }
             }
         }
@@ -255,7 +254,7 @@ private:
                 // If not too close to or too far from the gateway, judge if pass the gateway
                 bool if_passed_this_gateway = judgeIfLinesABCross(boundary_point1_x, boundary_point1_y, boundary_point2_x, boundary_point2_y,
                                                                   recorded_path.front().x, recorded_path.front().y, recorded_path.back().x, recorded_path.back().y);
-                std::cout << "cross line = " << if_passed_this_gateway << std::endl;
+//                std::cout << "cross line = " << if_passed_this_gateway << std::endl;
 
                 if(if_passed_this_gateway){
                     gateway_passed = feature;

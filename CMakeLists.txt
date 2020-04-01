@@ -12,13 +12,27 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   gazebo_msgs
   tf
+  message_generation
 )
 
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(Threads)
 
-catkin_package()
+add_message_files(
+        FILES
+        Feature.msg
+        Features.msg
+)
+
+generate_messages(
+        DEPENDENCIES
+        std_msgs
+)
+
+catkin_package(
+        CATKIN_DEPENDS message_runtime
+        )
 
 set(tinyxml2_LIB
         /usr/local/lib/libtinyxml2.so
@@ -62,4 +76,5 @@ add_executable(rect_classify_predict_angle src/rect_classify_predict_angle.cpp)
 target_link_libraries(rect_classify_predict_angle  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(real_time_prediction src/real_time_prediction.cpp)
+add_dependencies(real_time_prediction ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} )
 target_link_libraries(real_time_prediction  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT} ${catkin_LIBRARIES} ${PCL_LIBRARIES})
