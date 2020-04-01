@@ -40,10 +40,13 @@ class LocalFeatureMap {
 public:
 
     std::vector<Feature> feature_map;
-    std::vector<Feature> gateways_in_neighborhood_area;
 
     std::queue<Pose2D> recorded_path;
+
     Pose2D vehicle_current_pose;
+
+    Feature gateway_just_passed;
+
 
 
     /** Coefficients **/
@@ -121,7 +124,6 @@ public:
                 }
             }
         }
-
         // Reduce the confidence of undetected features nearby, which should be detected. If the confidence is too low, delete the feature.
         for(int seq=0; seq < feature_map.size(); seq++){
             if(feature_map[seq].in_fov_flag && !feature_updated[seq]){
@@ -170,49 +172,76 @@ public:
             }
 
             if(recorded_path.size() > 2){
-                /* Check if pass a gateway. If pass. delete other gateways in neighborhood area */
-                Feature gateway_passed;
-                bool if_pass_any_gateway = checkIfPassedGateway(gateway_passed);
+                /* Check if pass a gateway. If pass, check and correct the direction of the passed gateway. */
+                bool if_pass_any_gateway = checkIfPassedGateway(gateway_just_passed);
                 if(if_pass_any_gateway){
                     arrived_at_new_node = true;
-                    std::cout << "Passed Gateway (" << gateway_passed.pose.x << ", " <<gateway_passed.pose.y << ")"<<std::endl;
+                    std::cout << "Passed Gateway (" << gateway_just_passed.pose.x << ", " <<gateway_just_passed.pose.y << ")"<<std::endl;
                     /* Check and correct the direction of this passed gateway */
                     for(auto &feature : feature_map){  // Find the gateway in map and correct its direction
-                        if(feature.label == "gateway" && feature.pose.x == gateway_passed.pose.x && feature.pose.y == gateway_passed.pose.y){
+                        if(feature.label == "gateway" && feature.pose.x == gateway_just_passed.pose.x && feature.pose.y == gateway_just_passed.pose.y){
                             float dx = feature.pose.x - vehicle_pose.x;
                             float dy = feature.pose.y - vehicle_pose.y;
                             float angle_vec_x = cos(feature.pose.yaw);
                             float angle_vec_y = sin(feature.pose.yaw);
-                            if(dx*angle_vec_x + dy*angle_vec_y < 0){
+                            if(dx*angle_vec_x + dy*angle_vec_y > 0){
                                 reverseAngle(feature.pose.yaw);
                             }
                         }
+                        feature.in_fov_flag = false; //Passed this gateway, all in_fov_flag should be false
                     }
                 }
             }
         }
 
-        printMapInfo();
+//        printMapInfo();
 
         return arrived_at_new_node;
     }
 
-    bool deleteGateways(Pose2D &vehicle_pose){
-        /// TODO: delete other gateways in neighborhood area. These gateways are given in ROS node
+    bool deleteFromFeatureMap(std::vector<FeatureIN> &features_to_delete){
+        /* Keep the gateway_just_passed and removed the newly detected gateways*/
+        for(const auto &feature_d : features_to_delete){
+            if(!featureInCloseToStoredFeature(feature_d, gateway_just_passed)){
+                for(auto it = feature_map.begin(); it != feature_map.end(); it++)
+                {
+                    if(featureInCloseToStoredFeature(feature_d, *it)){
+                        feature_map.erase(it);
+                        break;
+                    }
+                }
+            }
+        }
     }
 
+    void getGatewayBoundaryPoints(const Feature &gateway, float &boundary_point1_x, float &boundary_point1_y, float &boundary_point2_x,float &boundary_point2_y)
+    {
+        float boundary_point_direction1 = gateway.pose.yaw + M_PI_2;
+        float boundary_point_direction2 = gateway.pose.yaw - M_PI_2;
+        boundary_point1_x = Gateway_Normal_Length / 2 * cos(boundary_point_direction1) + gateway.pose.x;
+        boundary_point1_y = Gateway_Normal_Length / 2 * sin(boundary_point_direction1) + gateway.pose.y;
+        boundary_point2_x = Gateway_Normal_Length / 2 * cos(boundary_point_direction2) + gateway.pose.x;
+        boundary_point2_y = Gateway_Normal_Length / 2 * sin(boundary_point_direction2) + gateway.pose.y;
+    }
 
+    void getGatewayBoundaryPixelPoints(int gateway_pose_x, int gateway_pose_y, float gateway_direction, float &boundary_point1_x,
+            float &boundary_point1_y, float &boundary_point2_x,float &boundary_point2_y, int gateway_length = 16)
+    {
+        float boundary_point_direction1 = gateway_direction + M_PI_2;
+        float boundary_point_direction2 = gateway_direction - M_PI_2;
+        boundary_point1_x = gateway_length / 2 * cos(boundary_point_direction1) + gateway_pose_x;
+        boundary_point1_y = gateway_length / 2 * sin(boundary_point_direction1) + gateway_pose_y;
+        boundary_point2_x = gateway_length / 2 * cos(boundary_point_direction2) + gateway_pose_x;
+        boundary_point2_y = gateway_length / 2 * sin(boundary_point_direction2) + gateway_pose_y;
+    }
 
 private:
     bool checkIfPassedGateway(Feature &gateway_passed){
         for(const auto &feature : feature_map){
-            if(feature.label == "gateway" && feature.exsitence_confidence > Confidence_High){
-                float boundary_point_direction1 = feature.pose.yaw + M_PI_2;
-                float boundary_point_direction2 = feature.pose.yaw - M_PI_2;
-                float boundary_point1_x = Gateway_Normal_Length / 2 * cos(boundary_point_direction1) + feature.pose.x;
-                float boundary_point1_y = Gateway_Normal_Length / 2 * sin(boundary_point_direction1) + feature.pose.y;
-                float boundary_point2_x = Gateway_Normal_Length / 2 * cos(boundary_point_direction2) + feature.pose.x;
-                float boundary_point2_y = Gateway_Normal_Length / 2 * sin(boundary_point_direction2) + feature.pose.y;
+            if(feature.label == "gateway" && feature.exsitence_confidence >= Confidence_High){
+
+                float boundary_point1_x, boundary_point1_y, boundary_point2_x, boundary_point2_y;
+                getGatewayBoundaryPoints(feature, boundary_point1_x, boundary_point1_y, boundary_point2_x, boundary_point2_y);
 
                 float vehicle_gateway_distance = calculatePointToLineSegmentDistance(vehicle_current_pose.x, vehicle_current_pose.y,
                         boundary_point1_x, boundary_point1_y, boundary_point2_x, boundary_point2_y);
@@ -318,7 +347,7 @@ private:
         }
     }
 
-    int featureInCloseToStoredFeature(const FeatureIN &f1, const Feature &f2, float distance_threshold = 0.6, float direction_threshold = 1.57) // m ,rad
+    int featureInCloseToStoredFeature(const FeatureIN &f1, const Feature &f2, float distance_threshold = 0.8, float direction_threshold = 1.05) // m ,rad
     {
         /** Return: 0: not close; 1: position close but yaw is very different; 2: position and yaw are both close **/
         if(f1.label != f2.label){
@@ -356,11 +385,11 @@ LocalFeatureMap::LocalFeatureMap() :
                     Pass_Gateway_Check_Distance(2.f),
                     Gateway_Normal_Length(4.f),
                     Confidence_Init(0.5),
-                    Confidence_High(0.8),
+                    Confidence_High(0.7),
                     Confidence_Low(0.2),
                     Confidence_Add_Step(0.1),
-                    Confidence_Reduce_Step(0.1),
-                    Confidence_Max(1.0),
+                    Confidence_Reduce_Step(0.06),
+                    Confidence_Max(1.2),
                     Confidence_Min(0),
                     In_Gateway_Distance_threshold(0.5),
                     Gateway_Detect_Range(3.2)
