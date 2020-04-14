@@ -186,6 +186,40 @@ static void construct_net30(network<sequential>& nn) {
 }
 
 
+static void construct_vggnet(network<sequential>& nn) {
+    using fc = tiny_dnn::layers::fc;
+    using conv = tiny_dnn::layers::conv;
+    using ave_pool = tiny_dnn::layers::ave_pool;
+    using max_pool = tiny_dnn::layers::max_pool;
+    using tanh = tiny_dnn::activation::tanh;
+    using relu = tiny_dnn::activation::relu;
+
+    using tiny_dnn::core::connection_table;
+    using padding = tiny_dnn::padding;
+
+
+    nn  << conv(RECT_SIZE_X, RECT_SIZE_Y, 3, 1, 32,   // C1, 1@30x30-in, 64@28x28-out
+                padding::valid, true, 1, 1, 1, 1)
+        << relu(28,28,32)
+        << max_pool(28, 28, 32, 2)   // S2, 64@28x28-in, 64@14x14-out
+        << relu(14,14,32)
+        << conv(14, 14, 3, 32, 64,  // C3-1, 64@14x14-in, 128@12x12-out
+                padding::valid, true, 1, 1, 1, 1)
+        << relu(12, 12, 64)
+        << conv(12, 12, 3, 64, 64,  // C3-2, 128@12x12-in, 128@10x10-out
+                padding::valid, true, 1, 1, 1, 1)
+        << relu(10, 10, 64)
+        << max_pool(10, 10, 64, 2)   // S4, 128@10x10-in, 128@5x5-out
+        << relu(5,5,64)
+        << conv(5, 5, 3, 64, 128,  // C5-1, 128@5x5-in, 256@3x3-out
+                padding::valid, true, 1, 1, 1, 1)
+        << relu(3,3,128)
+        << conv(3, 3, 3, 128, 128,  // C5-2, 256@3x3-in, 256@1x1-out
+                padding::valid, true, 1, 1, 1, 1)
+        << relu(1,1,128)
+        << fc(128, 1, true);  // F6, 128-in, 1-out
+}
+
 void shuffle(std::vector<vec_t>& images, std::vector<vec_t>& labels)
 {
     unsigned seed;  // Random generator seed for collecting extra negative samples
@@ -216,7 +250,8 @@ static void train_lenet(tiny_dnn::network<tiny_dnn::sequential> &nn,
 
     /// Choose a network here
     //construct_net(nn);
-    construct_net30(nn);
+//    construct_net30(nn);
+    construct_vggnet(nn);
 
     tiny_dnn::progress_display disp(static_cast<unsigned long>(trainging_data.size()));
     tiny_dnn::timer t;
@@ -421,8 +456,7 @@ int main(){
         /// Training
         tiny_dnn::network<tiny_dnn::sequential> nn;
         train_lenet(nn, training_data_desired_form, training_labels_desired_form, validation_data_desired_form,
-                validation_labels_desired_form, 1.0, 200, 64, "LeNet-model-rects-regression");
-
+                validation_labels_desired_form, 1.0, 250, 64, "VGGNet-model-rects-regression");
     }
 
     /**----------------------------------------------**/
@@ -466,7 +500,7 @@ int main(){
 
     /// Load model and testing
     tiny_dnn::network<tiny_dnn::sequential> model, angle_model;
-    model.load("LeNet-model-rects-regression");
+    model.load("VGGNet-model-rects-regression");
     angle_model.load("LeNet-model-angles-regression");
 
     std::cout << "Model loaded!" << std::endl;
@@ -491,7 +525,7 @@ int main(){
 
         /// Extract skeleton points
         std::vector<cv::Point> skeleton_points;
-        findVoronoiSkeletonPoints(image_this, skeleton_points, false);  /// CHG
+        findVoronoiSkeletonPoints(image_this, skeleton_points, true);  /// CHG
         if(skeleton_points.size() < 1){
             std::cout << "Found no skeleton_points in this image, skip!" << std::endl;
             continue;

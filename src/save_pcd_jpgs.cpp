@@ -23,7 +23,7 @@
 using namespace std;
 using namespace message_filters;
 
-string path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/route2/";
+string path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku/";
 
 void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_msgs::PointStampedConstPtr& center)
 {

@@ -415,7 +415,6 @@ int main(){
         cv::Mat image_this_copy = image_this.clone();
         cv::Mat image_this_copy2 = image_this.clone();
 
-
         start_time = clock();
 
         /// Extract skeleton points

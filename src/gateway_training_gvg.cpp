@@ -250,7 +250,9 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
         turnBlacktoGray(img_in); // CHG
 
         std::vector<cv::Point> skeleton_points;
-        findVoronoiSkeletonPoints(img_in, skeleton_points);  /// CHG
+        findVoronoiSkeletonPoints(img_in, skeleton_points, false);  /// CHG
+//        cv::waitKey();
+
         if(skeleton_points.size() < 2){
             std::cout << "Found no skeleton_points in file " <<  img_path << ", skip!" << std::endl;
             continue;
@@ -288,11 +290,16 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
 
         /// Add samples corresponding to the hand-labeled gateway position in csv files
         std::vector<Eigen::Vector2i> positive_sample_positions;
+        std::vector<Eigen::Vector2i> labeled_positions;
         for(const auto &object : objects){
             if(object.label == "gateway"){
-
                 /// Use nearest skeleton point to correct hand label error
-                cv::Point gateway_img_pos((object.x_min + object.x_max)/2, (object.y_min + object.y_max)/2);
+                Eigen::Vector2i labeled_gateway_pos;
+                labeled_gateway_pos << (object.y_min + object.y_max)/2, (object.x_min + object.x_max)/2;
+                labeled_positions.push_back(labeled_gateway_pos);
+
+                cv::Point gateway_img_pos(labeled_gateway_pos(1), labeled_gateway_pos(0));
+
                 cv::Point nearest_skeleton;
                 float nearest_dist = findNearestPoint(gateway_img_pos, skeleton_points, nearest_skeleton);
                 if(nearest_dist > 2.5){
@@ -352,7 +359,8 @@ void generateTrainingData(std::string data_dir, int extra_negative_sample_num = 
             Eigen::Vector2i point;
             point << skeleton_points[random_seq].y, skeleton_points[random_seq].x;
 
-            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, negative_data_save_dist_threshold)){
+            if(!ifCloseToAnyPointInVector(point, positive_sample_positions, negative_data_save_dist_threshold)
+                && !ifCloseToAnyPointInVector(point, labeled_positions, negative_data_save_dist_threshold)){
 
                 // Save rect for other training
                 if(save_rect_images){
@@ -755,7 +763,7 @@ int main(int argc, char** argv)
         rect_save_counter = 0; //reset counter to avoid save the same images
 
         /// Generating training data
-        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/30x30/";
+        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/";
 
         generateTrainingData(training_data_path, maximum_extra_sample);
 

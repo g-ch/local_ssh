@@ -99,11 +99,19 @@ void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_poi
     cv::erode(map_eroded, map_eroded, element);
 
     /// 5. Voronoi diagram
+    cv::Mat large_size_img;
+    int scale = 2;
+    cv::resize(map_eroded, large_size_img, cv::Size(scale*map_eroded.cols, scale*map_eroded.rows), 0, 0, cv::INTER_NEAREST);
+
     std::vector<cv::Point2f> obstacle_points;
-    voronoiGenerate(map_eroded, obstacle_points);
-    for(int i=0; i<map_eroded.rows; i++){
-        for(int j=0; j<map_eroded.cols; j++){
-            if(map_eroded.ptr<unsigned char>(i)[j] == SKELETON_POINT_COLOR) {
+    voronoiGenerate(large_size_img, obstacle_points);
+
+    cv::Mat ori_size_img_with_skeletons;
+    cv::resize(large_size_img, ori_size_img_with_skeletons, cv::Size(map_eroded.cols, map_eroded.rows), 0, 0, cv::INTER_NEAREST);
+
+    for(int i=0; i<ori_size_img_with_skeletons.rows; i++){
+        for(int j=0; j<ori_size_img_with_skeletons.cols; j++){
+            if(ori_size_img_with_skeletons.ptr<unsigned char>(i)[j] == SKELETON_POINT_COLOR) {
                 cv::Point p(j, i);
                 skeleton_points.push_back(p);
             }
@@ -112,6 +120,7 @@ void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_poi
 
     /// 6. Visualization
     if(show_result){
+        std::cout << "found " << skeleton_points.size() << " points" << std::endl;
         cv::Mat image;
         map.copyTo(image);
         for(const auto &point : skeleton_points){
