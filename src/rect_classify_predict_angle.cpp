@@ -399,13 +399,13 @@ float sumMatOneChannel(cv::Mat &src){
 int main(){
     std::vector<std::string> positive_sample_file_names, negative_sample_file_names;
 
-    std::string positive_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/30x30/positive/";
-    std::string negative_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/30x30/negative/";
+    std::string positive_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/positive/";
+    std::string negative_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/negative/";
 
     getFileNames(positive_data_dir, positive_sample_file_names, ".png");
     getFileNames(negative_data_dir, negative_sample_file_names, ".png");
 
-    bool if_training_gateway_position = false;
+    bool if_training_gateway_position = true;
     if(if_training_gateway_position){
         /// Read images
         std::vector<cv::Mat> positive_sample_rects, negative_sample_rects;
@@ -462,10 +462,10 @@ int main(){
     /**----------------------------------------------**/
 
     std::vector<std::string> angle_training_file_names;
-    string angle_training_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/30x30/positive/";
+    string angle_training_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/positive/";
     getFileNames(angle_training_data_dir, angle_training_file_names, ".png");
 
-    bool if_training_angle = false;
+    bool if_training_angle = true;
 
     if(if_training_angle){
         std::vector<float> positive_angle_output;
@@ -505,7 +505,7 @@ int main(){
 
     std::cout << "Model loaded!" << std::endl;
     /// Testing on images and show
-    std::string testing_images_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/Floor2/";
+    std::string testing_images_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku/";
     std::vector<std::string> image_names;
     getFileNames(testing_images_dir, image_names, ".png");
 
