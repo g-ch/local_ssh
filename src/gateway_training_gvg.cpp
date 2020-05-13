@@ -33,7 +33,7 @@ bool save_rect_images = true;
 const int rect_to_save_size_x = 30; //26
 const int rect_to_save_size_y = 30;  //26
 int rect_save_counter = 0;
-int negative_data_save_dist_threshold = 3;
+int negative_data_save_dist_threshold = 4;
 
 const float kernel_scale_factor = 0.85;
 const int kernel_scale_times = 4;
@@ -758,12 +758,12 @@ int main(int argc, char** argv)
     for(int training_times=0; training_times < 20; training_times++){
         std::cout<<"************************************************" <<std::endl;
         std::cout << "start " << training_times << " times training" << std::endl;
-        int maximum_extra_sample = rand() % 10 + 3;
+        int maximum_extra_sample = rand() % 10 + 4;
         std::cout << "maximum_extra_sample = " << maximum_extra_sample << std::endl;
         rect_save_counter = 0; //reset counter to avoid save the same images
 
         /// Generating training data
-        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/";
+        std::string training_data_path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects3/";
 
         generateTrainingData(training_data_path, maximum_extra_sample);
 

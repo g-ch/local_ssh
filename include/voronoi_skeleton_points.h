@@ -86,7 +86,7 @@ void findVoronoiSkeletonPoints(cv::Mat map, std::vector<cv::Point> &skeleton_poi
 
     /// 2. Erode and dilate
     cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5,5));
-    cv::erode(map, map_eroded, element); //Opening operation
+    cv::erode(map_eroded, map_eroded, element); //Opening operation
     cv::dilate(map_eroded, map_eroded, element);
 
     /// 3. Flood fill to keep only one connected region

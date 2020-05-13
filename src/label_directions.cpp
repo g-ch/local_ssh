@@ -66,11 +66,10 @@ void mouseEvent( int event, int x, int y, int flags, void* ustc)
 
 int main(int argc, char** argv)
 {
-    string path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/positive/";
+    string path = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects2/positive/";
     std::vector<std::string> filenames;
 
     getFileNames(path, filenames, ".png");
-
 
     for(int file_seq = 0; file_seq < filenames.size(); ){
         string file = filenames[file_seq];

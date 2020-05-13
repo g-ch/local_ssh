@@ -250,8 +250,8 @@ static void train_lenet(tiny_dnn::network<tiny_dnn::sequential> &nn,
 
     /// Choose a network here
     //construct_net(nn);
-//    construct_net30(nn);
-    construct_vggnet(nn);
+    construct_net30(nn);
+//    construct_vggnet(nn);
 
     tiny_dnn::progress_display disp(static_cast<unsigned long>(trainging_data.size()));
     tiny_dnn::timer t;
@@ -399,8 +399,8 @@ float sumMatOneChannel(cv::Mat &src){
 int main(){
     std::vector<std::string> positive_sample_file_names, negative_sample_file_names;
 
-    std::string positive_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/positive/";
-    std::string negative_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/negative/";
+    std::string positive_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/30combined/positive/";
+    std::string negative_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/30combined/negative/";
 
     getFileNames(positive_data_dir, positive_sample_file_names, ".png");
     getFileNames(negative_data_dir, negative_sample_file_names, ".png");
@@ -456,16 +456,16 @@ int main(){
         /// Training
         tiny_dnn::network<tiny_dnn::sequential> nn;
         train_lenet(nn, training_data_desired_form, training_labels_desired_form, validation_data_desired_form,
-                validation_labels_desired_form, 1.0, 250, 64, "VGGNet-model-rects-regression");
+                validation_labels_desired_form, 1.0, 200, 64, "LeNet-model-rects-regression-30combined-lenet");
     }
 
     /**----------------------------------------------**/
 
     std::vector<std::string> angle_training_file_names;
-    string angle_training_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku_rects/positive/";
+    string angle_training_data_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/30combined/positive/";
     getFileNames(angle_training_data_dir, angle_training_file_names, ".png");
 
-    bool if_training_angle = true;
+    bool if_training_angle = false;
 
     if(if_training_angle){
         std::vector<float> positive_angle_output;
@@ -492,7 +492,7 @@ int main(){
 
         tiny_dnn::network<tiny_dnn::sequential> nn2;
         train_lenet(nn2, image_data_for_angle_training, angle_labels, image_data_for_angle_training,
-                angle_labels, 1.0, 200, 32, "LeNet-model-angles-regression");
+                angle_labels, 1.0, 200, 32, "LeNet-model-angles-regression-30combined-vgg");
     }
 
 
@@ -500,12 +500,12 @@ int main(){
 
     /// Load model and testing
     tiny_dnn::network<tiny_dnn::sequential> model, angle_model;
-    model.load("VGGNet-model-rects-regression");
-    angle_model.load("LeNet-model-angles-regression");
+    model.load("LeNet-model-rects-regression-30combined-lenet");
+    angle_model.load("LeNet-model-angles-regression-30combined-vgg");
 
     std::cout << "Model loaded!" << std::endl;
     /// Testing on images and show
-    std::string testing_images_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku/";
+    std::string testing_images_dir = "/home/cc/ros_ws/sim_ws/rolling_ws/src/local_ssh/data/new/sudoku2/";
     std::vector<std::string> image_names;
     getFileNames(testing_images_dir, image_names, ".png");
 
@@ -578,68 +578,6 @@ int main(){
                 result_angles.push_back(angle);
             }
         }
-
-
-//        /// Derive angle (traditional way) *******************************
-//        cv::Mat linear_kernel = cv::Mat::zeros(RECT_SIZE_Y + 10, RECT_SIZE_X + 10, CV_8UC1);
-//        for(int i=9+5; i<=16+5; i++){  //"-" shape
-//            for(int j=3+5; j<=22+5; j++){
-//                linear_kernel.at<uchar>(i, j)= 255;
-//            }
-//        }
-//
-//        for(int i=5+5; i<=19+5; i++){  //"-" shape
-//            for(int j=15+5; j<=20+5; j++){
-//                linear_kernel.at<uchar>(i, j)= 255;
-//            }
-//        }
-//
-//        const int angle_resolution = 15;
-//        const int angle_times = 360 / angle_resolution;
-//        const float scale_factor = 0.85;
-//        const int scale_times = 3;
-//
-//        std::vector<std::vector<float>> sum_set(result_points.size(), std::vector<float>(angle_times * scale_times, 0));
-//
-//        for(int angle_seq = 0; angle_seq < angle_times; angle_seq ++){
-//            cv::Mat linear_kernel_rotated;
-//            int angle = angle_resolution * angle_seq;
-//            imgRotateCutEdge(linear_kernel,linear_kernel_rotated, angle, cv::Scalar(0));
-//
-//            for(int scale_seq = 0; scale_seq < scale_times; scale_seq ++){
-//                float scale = pow(scale_factor, scale_seq);
-//                int size_x = RECT_SIZE_X / scale;
-//                int size_y = RECT_SIZE_Y / scale;
-//
-//                for(int seq=0; seq < result_points.size(); seq++){
-//                    auto point = result_points[seq];
-//
-//                    if(point.x < size_x/2 || point.x > image_this.cols-size_x/2-1 || point.y < size_y/2 || point.y > image_this.rows-size_y/2-1){
-//                        continue;
-//                    }
-//
-//                    cv::Mat linear_kernel_this = linear_kernel_rotated(cv::Rect(5,5, RECT_SIZE_X, RECT_SIZE_Y));
-////                cv::imshow("linear_kernel_this", linear_kernel_this);
-////                cv::waitKey();
-//                    cv::Mat rect_this = image_this(cv::Rect(point.x-size_x/2, point.y-size_y/2, size_x, size_y));
-//                    cv::resize(rect_this, rect_this, cv::Size(RECT_SIZE_Y,RECT_SIZE_X));
-//
-//                    cv::Mat combined = rect_this & linear_kernel_this;
-//                    float sum = (int)(sumMatOneChannel(combined) / scale) + angle / 1000.f;
-//                    sum_set[seq][angle_seq*scale_times + scale_seq] = -sum;
-//                }
-//            }
-//        }
-//
-//        std::vector<float> result_angles2;
-//        for(auto &sum_set_one_point : sum_set){
-//            std::sort(sum_set_one_point.begin(), sum_set_one_point.end());
-//            float angle = 0;
-//            angle =  ((long int)(sum_set_one_point[0]) - sum_set_one_point[0]) * 1000.f / 180 * CV_PI;
-//
-//            result_angles2.push_back(angle);
-//        }
-        /// End of Derive angle (traditional way) *******************************
 
 
         /// Combine two results

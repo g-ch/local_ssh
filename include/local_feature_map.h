@@ -346,7 +346,7 @@ private:
         }
     }
 
-    int featureInCloseToStoredFeature(const FeatureIN &f1, const Feature &f2, float distance_threshold = 0.8, float direction_threshold = 1.05) // m ,rad
+    int featureInCloseToStoredFeature(const FeatureIN &f1, const Feature &f2, float distance_threshold = 1.2, float direction_threshold = 3.14) // m ,rad
     {
         /** Return: 0: not close; 1: position close but yaw is very different; 2: position and yaw are both close **/
         if(f1.label != f2.label){
@@ -380,14 +380,14 @@ private:
 
 
 LocalFeatureMap::LocalFeatureMap() :
-                    Path_Record_Distance_Interval(0.2f),
-                    Pass_Gateway_Check_Distance(2.f),
+                    Path_Record_Distance_Interval(0.15f),
+                    Pass_Gateway_Check_Distance(1.5f),
                     Gateway_Normal_Length(4.f),
                     Confidence_Init(0.5),
-                    Confidence_High(0.7),
+                    Confidence_High(0.65),
                     Confidence_Low(0.2),
                     Confidence_Add_Step(0.1),
-                    Confidence_Reduce_Step(0.06),
+                    Confidence_Reduce_Step(0.04),
                     Confidence_Max(1.2),
                     Confidence_Min(0),
                     In_Gateway_Distance_threshold(0.5),

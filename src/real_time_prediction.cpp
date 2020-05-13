@@ -34,6 +34,7 @@
 
 #define RECT_SIZE_X 30 //26
 #define RECT_SIZE_Y 30 //26
+#define RECT_SHRINK_SIZE 10
 
 using namespace std;
 using namespace message_filters;
@@ -291,7 +292,8 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
 
     /// Extract skeleton points
     std::vector<cv::Point> skeleton_points;
-    findVoronoiSkeletonPoints(image_this, skeleton_points, false);  /// CHG
+    findVoronoiSkeletonPoints(image_this, skeleton_points, true);  /// CHG
+
     if(skeleton_points.size() < 1){
         std::cout << "Found no skeleton_points in this image, skip!" << std::endl;
         return;
@@ -304,13 +306,14 @@ void mapCallback(const sensor_msgs::PointCloud2ConstPtr& cloud, const geometry_m
         if(sk_point.x < RECT_SIZE_X/2 || sk_point.y <RECT_SIZE_Y/2 || sk_point.x > image_this.cols-RECT_SIZE_X/2-1 || sk_point.y > image_this.rows-RECT_SIZE_Y/2-1){
             continue;
         }else{
-            cv::Mat rect_this = image_this(cv::Rect(sk_point.x-RECT_SIZE_X/2, sk_point.y-RECT_SIZE_Y/2, RECT_SIZE_X, RECT_SIZE_Y));
+            cv::Mat rect_this = image_this(cv::Rect(sk_point.x-(RECT_SIZE_X-RECT_SHRINK_SIZE)/2, sk_point.y-(RECT_SIZE_Y-RECT_SHRINK_SIZE)/2, RECT_SIZE_X-RECT_SHRINK_SIZE, RECT_SIZE_Y-RECT_SHRINK_SIZE));
+            cv::resize(rect_this, rect_this, cv::Size(RECT_SIZE_X, RECT_SIZE_Y), 0,0, cv::INTER_NEAREST);
             vec_t data_this;
             convert_image(rect_this, data_this);
 
             vec_t label_this = model.predict(data_this);
 
-            if(label_this[0] < 0.5){
+            if(label_this[0] < 0.7){
                 float confidence = 1.f - label_this[0];
                 confidences_vec.push_back(confidence);
                 valid_points.push_back(sk_point);
@@ -474,8 +477,8 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "save_pcd_jpgs");
     ros::NodeHandle nh;
 
-    model.load("LeNet-model-rects-regression");
-    angle_model.load("LeNet-model-angles-regression");
+    model.load("LeNet-model-rects-regression-30combined-vgg");
+    angle_model.load("LeNet-model-angles-regression-30combined-vgg");
 
     LocalFeatureMap *node = new LocalFeatureMap;
     local_maps_on_nodes.push_back(*node);

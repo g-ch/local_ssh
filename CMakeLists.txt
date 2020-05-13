@@ -75,6 +75,12 @@ target_link_libraries(rename_imgs  ${OpenCV_LIBS} ${tinyxml2_LIB})
 add_executable(rect_classify_predict_angle src/rect_classify_predict_angle.cpp)
 target_link_libraries(rect_classify_predict_angle  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
 
+add_executable(heatmap_training src/heatmap_training.cpp)
+target_link_libraries(heatmap_training  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(heatmap_data_generation src/heatmap_data_generation.cpp)
+target_link_libraries(heatmap_data_generation  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT})
+
 add_executable(real_time_prediction src/real_time_prediction.cpp)
 add_dependencies(real_time_prediction ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} )
 target_link_libraries(real_time_prediction  ${OpenCV_LIBS} ${tinyxml2_LIB} ${CMAKE_THREAD_LIBS_INIT} ${catkin_LIBRARIES} ${PCL_LIBRARIES})

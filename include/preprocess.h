@@ -30,7 +30,7 @@ void turnBlacktoGray(cv::Mat &src){
     }
 }
 
-void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all")
+void getFileNames(std::string path, std::vector<std::string>& filenames, std::string required_type=".all", bool require_suffix = true)
 {
     /// The required_type should be like ".jpg" or ".xml".
     DIR *pDir;
@@ -48,7 +48,12 @@ void getFileNames(std::string path, std::vector<std::string>& filenames, std::st
             std::string::size_type position;
             position = file_name_temp.find(required_type);
             if(position != file_name_temp.npos){
-                std::string file_name_temp2 = file_name_temp.substr(0, position) + required_type;
+                std::string file_name_temp2;
+                if(require_suffix){
+                    file_name_temp2 = file_name_temp.substr(0, position) + required_type;
+                } else{
+                    file_name_temp2 = file_name_temp.substr(0, position);
+                }
 //                std::cout << file_name_temp2 << std::endl;
                 filenames.push_back(file_name_temp2);
             }
